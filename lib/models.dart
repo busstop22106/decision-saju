@@ -5,12 +5,12 @@
 // 이름 짓기 전용 모델(SurnamePick, SharedBaby, DimensionGrade,
 // DimensionScore, NameAnalysis)은 가져오지 않았다.
 // TODO: GenderX label이 '남아'/'여아'라 성인 가족 구성원에는 맞지 않는다.
-// 가족 구성원 입력 화면을 만들 때 남성/여성 표기로 바꿀 것.
+// → 2026-11-09 남성/여성 표기로 바꿈 (가족 구성원 입력 화면용).
 
 enum Gender { boy, girl }
 
 extension GenderX on Gender {
-  String get label => this == Gender.boy ? '남아' : '여아';
+  String get label => this == Gender.boy ? '남성' : '여성';
 }
 
 class BabyInfo {
@@ -185,6 +185,79 @@ class HanjaPick {
         strokes: strokes.toInt(),
         element: element,
         meaning: meaning,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+/// 가족 보관함 구성원 한 명 (최대 3명, 로컬 저장)
+/// 사주 계산은 이 모델이 직접 하지 않는다 — 화면·서비스에서
+/// sajuOfBirth(birth, birthHour)로 계산한다 (models ↔ engine 순환 import 방지).
+class FamilyMember {
+  final String id; // 저장 시 식별자 (생성 시각 기반)
+  final String name; // 표시 이름 (예: 나, 아빠, 엄마)
+  final String relation; // 관계 (나/아빠/엄마/배우자/자녀/형제자매/조부모/기타)
+  final Gender gender;
+  final DateTime birth; // 생년월일
+  final int? birthHour; // null이면 모름
+
+  const FamilyMember({
+    required this.id,
+    required this.name,
+    required this.relation,
+    required this.gender,
+    required this.birth,
+    this.birthHour,
+  });
+
+  bool get timeUnknown => birthHour == null;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'relation': relation,
+        'gender': gender.name,
+        'birth': birth.toIso8601String(),
+        'birthHour': birthHour,
+      };
+
+  factory FamilyMember.fromJson(Map<String, dynamic> j) => FamilyMember(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        relation: j['relation'] as String,
+        gender: (j['gender'] as String) == 'boy' ? Gender.boy : Gender.girl,
+        birth: DateTime.parse(j['birth'] as String),
+        birthHour: j['birthHour'] as int?,
+      );
+
+  /// 파싱에 실패한 항목은 null을 돌려준다 — 보관함 불러올 때 그 항목만 건너뛴다.
+  static FamilyMember? tryFromJson(Map<String, dynamic> j) {
+    try {
+      final id = j['id'];
+      final name = j['name'];
+      final relation = j['relation'];
+      final genderRaw = j['gender'];
+      final birthRaw = j['birth'];
+      if (id is! String || id.isEmpty) return null;
+      if (name is! String || name.isEmpty) return null;
+      if (relation is! String || relation.isEmpty) return null;
+      if (genderRaw is! String ||
+          (genderRaw != 'boy' && genderRaw != 'girl')) {
+        return null;
+      }
+      if (birthRaw is! String) return null;
+      final birth = DateTime.parse(birthRaw);
+      final hour = j['birthHour'];
+      if (hour is num && (hour < 0 || hour > 23)) return null;
+      return FamilyMember(
+        id: id,
+        name: name,
+        relation: relation,
+        gender: genderRaw == 'boy' ? Gender.boy : Gender.girl,
+        birth: birth,
+        birthHour: hour is num ? hour.toInt() : null,
       );
     } catch (_) {
       return null;

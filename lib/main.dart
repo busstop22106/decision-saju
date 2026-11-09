@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// 결정사주 — 스캐폴드용 최소 진입점.
-/// 무료 화면(만세력·오늘 운세·가족 보관함)과 결정 리포트 화면은
-/// 이후 단계에서 lib/screens/에 추가한다.
+import 'models.dart';
+import 'screens/family_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/saju_screen.dart';
+import 'services/family_store.dart';
+import 'theme/app_theme.dart';
+
 void main() {
   runApp(const DecisionSajuApp());
 }
@@ -14,14 +18,91 @@ class DecisionSajuApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: '결정사주',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+      theme: AppTheme.theme,
+      darkTheme: AppTheme.theme,
+      themeMode: ThemeMode.dark,
+      home: const MainShell(),
+    );
+  }
+}
+
+class MainShell extends StatefulWidget {
+  const MainShell({super.key});
+
+  @override
+  State<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<MainShell> {
+  int _index = 0;
+  List<FamilyMember> _members = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMembers();
+  }
+
+  Future<void> _loadMembers() async {
+    final members = await FamilyStore.load();
+    if (!mounted) return;
+    setState(() {
+      _members = members;
+      _loading = false;
+    });
+  }
+
+  Future<void> _addMember(FamilyMember member) async {
+    final next = await FamilyStore.add(_members, member);
+    setState(() => _members = next);
+  }
+
+  Future<void> _removeMember(String id) async {
+    final next = await FamilyStore.remove(_members, id);
+    setState(() => _members = next);
+  }
+
+  void _goToTab(int index) => setState(() => _index = index);
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = <Widget>[
+      HomeScreen(
+        members: _members,
+        onGoToFamily: () => _goToTab(2),
       ),
-      home: const Scaffold(
-        body: Center(
-          child: Text('결정사주 — 준비 중입니다'),
-        ),
+      SajuScreen(members: _members),
+      FamilyScreen(
+        members: _members,
+        onAdd: _addMember,
+        onRemove: _removeMember,
+      ),
+    ];
+    return Scaffold(
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : pages[_index],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _index,
+        onTap: (index) => setState(() => _index = index),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: '홈',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.auto_awesome_outlined),
+            activeIcon: Icon(Icons.auto_awesome),
+            label: '만세력',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.family_restroom_outlined),
+            activeIcon: Icon(Icons.family_restroom),
+            label: '가족 보관함',
+          ),
+        ],
       ),
     );
   }
