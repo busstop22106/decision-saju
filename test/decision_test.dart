@@ -106,6 +106,45 @@ void main() {
     });
   });
 
+  group('yearMonthScores', () {
+    final baby = BabyInfo(
+      surname: '',
+      surnameHanja: '',
+      surnameStrokes: 0,
+      gender: Gender.boy,
+      birth: DateTime(1987, 5, 20),
+      birthHour: 10,
+    );
+    final saju = computeSaju(baby);
+
+    test('12개월을 돌려주고 평균·최고날이 그 달 안에 있다', () {
+      final months = yearMonthScores(saju, 2027);
+      expect(months.length, 12);
+      for (var m = 0; m < 12; m++) {
+        expect(months[m].month, m + 1);
+        expect(months[m].avgScore, inInclusiveRange(0, 100));
+        expect(months[m].bestDay.year, 2027);
+        expect(months[m].bestDay.month, m + 1);
+        expect(months[m].bestScore, inInclusiveRange(0, 100));
+        // 그 달의 최고 점수와 일치한다
+        var max = 0;
+        final daysInMonth = DateTime(2027, m + 2, 0).day;
+        for (var d = 1; d <= daysInMonth; d++) {
+          final s = scoreDay(saju, DateTime(2027, m + 1, d));
+          if (s > max) max = s;
+        }
+        expect(months[m].bestScore, max);
+      }
+    });
+
+    test('평균이 가장 높은 달이 좋은 달 1위다', () {
+      final months = yearMonthScores(saju, 2027);
+      final sorted = [...months]
+        ..sort((a, b) => b.avgScore.compareTo(a.avgScore));
+      expect(sorted.first.avgScore, months.map((m) => m.avgScore).reduce((a, b) => a > b ? a : b));
+    });
+  });
+
   group('compareOptions', () {
     final baby = BabyInfo(
       surname: '',

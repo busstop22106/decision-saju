@@ -9,6 +9,7 @@ import '../services/decision_store.dart';
 import '../theme/app_theme.dart';
 import 'decision_log_screen.dart';
 import 'decision_report_screen.dart';
+import 'new_year_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final List<FamilyMember> members;
@@ -26,6 +27,12 @@ class HomeScreen extends StatelessWidget {
 
   String _todayLabel(DateTime now) =>
       '${now.month}월 ${now.day}일 ${_weekdays[now.weekday - 1]}요일';
+
+  /// 신년 시즌: 11월·12월·1월에만 신년 운세 카드를 보여준다.
+  bool _isNewYearSeason(DateTime now) =>
+      now.month == 11 || now.month == 12 || now.month == 1;
+
+  int _newYearLabel(DateTime now) => now.month >= 11 ? now.year + 1 : now.year;
 
   /// 가장 잘 맞는 구성원 쌍 (띠 점수 기준). 2명 미만이면 null.
   ({FamilyMember a, FamilyMember b, String label, double score})? _bestPair() {
@@ -227,6 +234,55 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
+          if (members.isNotEmpty && _isNewYearSeason(now)) ...[
+            _sectionTitle(theme, '신년 운세'),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.auto_awesome, color: AppTheme.vermilion),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${_newYearLabel(now)}년, 올해의 결정을 미리 보세요',
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '결정하기 좋은 달 · 신중하게 잡으면 좋은 달 · 월별 결정 지수',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  NewYearScreen(member: members.first),
+                            ),
+                          );
+                        },
+                        child: const Text('신년 운세 보기'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
           _sectionTitle(theme, '가족 보관함'),
           Card(
             child: Padding(

@@ -133,6 +133,39 @@ List<LuckyDay> dayScores(
   ];
 }
 
+/// 한 달의 결정 지수 요약.
+class YearMonthScore {
+  final int month;
+  final double avgScore;
+  final DateTime bestDay;
+  final int bestScore;
+
+  const YearMonthScore(this.month, this.avgScore, this.bestDay, this.bestScore);
+}
+
+/// 한 해(1~12월)의 월별 결정 지수 요약 — 신년 운세(올해의 결정형)용.
+/// 월 평균 지수·그 달의 가장 좋은 날을 돌려준다.
+List<YearMonthScore> yearMonthScores(SajuResult saju, int year) {
+  final result = <YearMonthScore>[];
+  for (var month = 1; month <= 12; month++) {
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    var sum = 0;
+    var bestDay = DateTime(year, month, 1);
+    var bestScore = -1;
+    for (var day = 1; day <= daysInMonth; day++) {
+      final d = DateTime(year, month, day);
+      final s = scoreDay(saju, d);
+      sum += s;
+      if (s > bestScore) {
+        bestScore = s;
+        bestDay = d;
+      }
+    }
+    result.add(YearMonthScore(month, sum / daysInMonth, bestDay, bestScore));
+  }
+  return result;
+}
+
 /// 앞으로 [days]일 중 점수가 가장 높은 날 [count]개를 날짜 순으로 돌려준다.
 List<LuckyDay> luckyDays(
   SajuResult saju,
