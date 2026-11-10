@@ -6,6 +6,7 @@ import '../engine/compat.dart';
 import '../engine/daily_fortune.dart';
 import '../models.dart';
 import '../services/decision_store.dart';
+import '../services/share_service.dart';
 import '../theme/app_theme.dart';
 import 'decision_log_screen.dart';
 import 'decision_report_screen.dart';
@@ -382,6 +383,20 @@ class HomeScreen extends StatelessWidget {
                 Text(
                   '${saju.dayMaster}일생',
                   style: theme.textTheme.bodySmall,
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.share_outlined,
+                    color: AppTheme.vermilion,
+                    size: 20,
+                  ),
+                  tooltip: '오늘 운세 공유하기',
+                  onPressed: () => shareText(
+                    '[결정사주] ${primary.name}님의 오늘 운세\n'
+                    '· 오늘의 기운: ${fortune.energy}\n'
+                    '· 결정에 참고할 것: ${fortune.decision}\n'
+                    '· 오늘 피할 것: ${fortune.caution}',
+                  ),
                 ),
               ],
             ),

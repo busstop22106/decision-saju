@@ -5,6 +5,7 @@ import 'package:decision_saju/engine/decision.dart';
 import 'package:decision_saju/models.dart';
 import 'package:decision_saju/screens/decision_log_screen.dart';
 import 'package:decision_saju/services/decision_store.dart';
+import 'package:decision_saju/services/share_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -349,6 +350,37 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('아직 저장된 결정이 없어요.'), findsOneWidget);
+    });
+  });
+
+  group('share_service', () {
+    testWidgets('RepaintBoundary를 PNG 바이트로 캡처한다', (tester) async {
+      final key = GlobalKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RepaintBoundary(
+              key: key,
+              child: Container(
+                width: 200,
+                height: 100,
+                color: Colors.white,
+                child: const Text('공유 카드'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // toImage는 엔진 래스터 콜백을 기다리므로 runAsync 안에서 돌린다.
+      final bytes = await tester.runAsync(() => capturePng(key));
+      expect(bytes, isNotNull);
+      expect(bytes!.isNotEmpty, true);
+      // PNG 시그니처 (89 50 4E 47)
+      expect(bytes[0], 0x89);
+      expect(bytes[1], 0x50);
+      expect(bytes[2], 0x4E);
+      expect(bytes[3], 0x47);
     });
   });
 }

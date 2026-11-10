@@ -9,8 +9,10 @@ import '../engine/compat.dart';
 import '../engine/decision.dart';
 import '../models.dart';
 import '../services/decision_store.dart';
+import '../services/share_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_member_sheet.dart';
+import '../widgets/report_share_card.dart';
 import 'lucky_days_screen.dart';
 
 const List<String> _topics = ['이직', '이사', '결혼', '개업', '출산', '기타'];
@@ -280,6 +282,37 @@ class DecisionReportScreen extends StatefulWidget {
 
 class _DecisionReportScreenState extends State<DecisionReportScreen> {
   bool _saved = false;
+  final _shareKey = GlobalKey();
+
+  Future<void> _saveImage() async {
+    final bytes = await capturePng(_shareKey);
+    if (bytes == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('카드를 불러오는 중이에요. 잠시 뒤 다시 눌러주세요.')),
+      );
+      return;
+    }
+    final ok = await savePngToGallery(bytes);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? '이미지를 갤러리에 저장했어요.' : '갤러리 저장 권한이 필요해요.'),
+      ),
+    );
+  }
+
+  Future<void> _shareImage(String shareText) async {
+    final bytes = await capturePng(_shareKey);
+    if (bytes == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('카드를 불러오는 중이에요. 잠시 뒤 다시 눌러주세요.')),
+      );
+      return;
+    }
+    await sharePngBytes(bytes, shareText);
+  }
 
   BabyInfo get _baby => BabyInfo(
         surname: '',
@@ -537,6 +570,44 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
           const SizedBox(height: 8),
           Text(
             '저장하면 30일 뒤 "그 결정, 어떻게 됐어요?"라고 다시 물어봐요.',
+            style: theme.textTheme.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          _sectionTitle(theme, '공유하기'),
+          RepaintBoundary(
+            key: _shareKey,
+            child: ReportShareCard(
+              memberName: widget.member.name,
+              topic: widget.topic,
+              index: index,
+              conclusion: conclusion,
+              luckyDays: lucky,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _saveImage,
+                  child: const Text('이미지로 저장'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _shareImage(
+                    '[결정사주] ${widget.member.name}님의 ${widget.topic} 결정 리포트 — 오늘의 결정 지수 $index점. $conclusion',
+                  ),
+                  child: const Text('공유하기'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '공유하기를 누르면 카카오톡·메시지 등으로 보낼 수 있어요.',
             style: theme.textTheme.bodySmall,
             textAlign: TextAlign.center,
           ),

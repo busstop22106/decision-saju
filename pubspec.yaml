@@ -37,6 +37,8 @@ dependencies:
 
   # 가족 보관함 로컬 저장 (구성원 최대 3명)
   shared_preferences: ^2.5.0
+  share_plus: ^13.3.1
+  gal: ^2.3.3
 
   # 한옥 클래식 세리프 폰트 (Noto Serif KR) — 맥북에서 직접 넣는 단계:
   # 1. Google Fonts에서 Noto Serif KR Regular(400)·Bold(700) TTF를 받는다.
