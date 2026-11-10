@@ -69,6 +69,7 @@ class _MainShellState extends State<MainShell> {
       HomeScreen(
         members: _members,
         onGoToFamily: () => _goToTab(2),
+        onAddMember: _addMember,
       ),
       SajuScreen(members: _members),
       FamilyScreen(

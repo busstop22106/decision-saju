@@ -6,15 +6,18 @@ import '../engine/compat.dart';
 import '../engine/daily_fortune.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import 'decision_report_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final List<FamilyMember> members;
   final VoidCallback onGoToFamily;
+  final Future<void> Function(FamilyMember) onAddMember;
 
   const HomeScreen({
     super.key,
     required this.members,
     required this.onGoToFamily,
+    required this.onAddMember,
   });
 
   static const _weekdays = ['월', '화', '수', '목', '금', '토', '일'];
@@ -46,20 +49,13 @@ class HomeScreen extends StatelessWidget {
     return best;
   }
 
-  void _showReportInfo(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('결정 리포트'),
-        content: const Text(
-          'A/B 양자택일 결론 + 근거 3줄, 30일 길일 3개, 오늘 피할 것 1개, 결정 기록(30일 뒤 되물음)이 들어 있어요.\n\n가격 4,900원 · 일회성 · 구독 없음\n\n결제 기능은 준비 중이에요. 먼저 무료 화면을 써보세요.',
+  void _openReportForm(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DecisionFormScreen(
+          members: members,
+          onAddMember: onAddMember,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('확인'),
-          ),
-        ],
       ),
     );
   }
@@ -170,7 +166,7 @@ class HomeScreen extends StatelessWidget {
                       Text('일회성 · 구독 없음', style: theme.textTheme.bodySmall),
                       const Spacer(),
                       FilledButton(
-                        onPressed: () => _showReportInfo(context),
+                        onPressed: () => _openReportForm(context),
                         child: const Text('만들기'),
                       ),
                     ],

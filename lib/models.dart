@@ -264,3 +264,93 @@ class FamilyMember {
     }
   }
 }
+
+/// 결정 기록 1건 — 결정 리포트에서 저장하고 30일 뒤 결과를 되묻는다.
+class DecisionRecord {
+  final String id;
+  final String topic; // 이직 / 이사 / 결혼 / 개업 / 출산 / 기타
+  final String optionA;
+  final String optionB;
+
+  /// 'A' | 'B' | '비슷함'
+  final String chosen;
+  final DateTime decidedAt;
+  final String summary; // 리포트 결론 1줄
+  final int index; // 그날의 결정 지수
+
+  /// 되물음 답: '잘 됐어요' | '아직 몰라요' | '안 됐어요' | null(아직 안 물음)
+  final String? followUp;
+  final DateTime? followUpAt;
+
+  const DecisionRecord({
+    required this.id,
+    required this.topic,
+    required this.optionA,
+    required this.optionB,
+    required this.chosen,
+    required this.decidedAt,
+    required this.summary,
+    required this.index,
+    this.followUp,
+    this.followUpAt,
+  });
+
+  /// 30일이 지나고 아직 되묻지 않았으면 true.
+  bool get followUpDue =>
+      followUp == null &&
+      DateTime.now().isAfter(decidedAt.add(const Duration(days: 30)));
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'topic': topic,
+        'optionA': optionA,
+        'optionB': optionB,
+        'chosen': chosen,
+        'decidedAt': decidedAt.toIso8601String(),
+        'summary': summary,
+        'index': index,
+        'followUp': followUp,
+        'followUpAt': followUpAt?.toIso8601String(),
+      };
+
+  factory DecisionRecord.fromJson(Map<String, dynamic> json) {
+    return DecisionRecord(
+      id: json['id'] as String,
+      topic: json['topic'] as String,
+      optionA: json['optionA'] as String,
+      optionB: json['optionB'] as String,
+      chosen: json['chosen'] as String,
+      decidedAt: DateTime.parse(json['decidedAt'] as String),
+      summary: json['summary'] as String,
+      index: json['index'] as int,
+      followUp: json['followUp'] as String?,
+      followUpAt: json['followUpAt'] == null
+          ? null
+          : DateTime.parse(json['followUpAt'] as String),
+    );
+  }
+
+  static DecisionRecord? tryFromJson(dynamic value) {
+    if (value is! Map<String, dynamic>) return null;
+    try {
+      return DecisionRecord.fromJson(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  DecisionRecord copyWith({String? followUp, DateTime? followUpAt}) {
+    return DecisionRecord(
+      id: id,
+      topic: topic,
+      optionA: optionA,
+      optionB: optionB,
+      chosen: chosen,
+      decidedAt: decidedAt,
+      summary: summary,
+      index: index,
+      followUp: followUp ?? this.followUp,
+      followUpAt: followUpAt ?? this.followUpAt,
+    );
+  }
+}
