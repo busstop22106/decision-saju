@@ -1,7 +1,11 @@
+import 'dart:convert';
+
 import 'package:decision_saju/engine/saju.dart';
 import 'package:decision_saju/engine/decision.dart';
 import 'package:decision_saju/models.dart';
+import 'package:decision_saju/screens/decision_log_screen.dart';
 import 'package:decision_saju/services/decision_store.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -238,6 +242,61 @@ void main() {
       expect(await store.answerFollowUp('r1', '잘 됐어요'), true);
       expect(store.dueFollowUps(), isEmpty);
       expect(store.loadAll().first.followUp, '잘 됐어요');
+    });
+  });
+
+  group('DecisionLogScreen', () {
+    DecisionRecord record({required String id, required DateTime decidedAt}) {
+      return DecisionRecord(
+        id: id,
+        topic: '이직',
+        optionA: '지금 회사에 남기',
+        optionB: '다른 회사로 옮기기',
+        chosen: 'A',
+        decidedAt: decidedAt,
+        summary: 'A안이 유리해요.',
+        index: 72,
+      );
+    }
+
+    testWidgets('저장된 기록이 보이고 되물음에 답하면 사라진다', (tester) async {
+      final now = DateTime.now();
+      SharedPreferences.setMockInitialValues({
+        'decision_records_v1': jsonEncode([
+          record(
+            id: 'due1',
+            decidedAt: now.subtract(const Duration(days: 31)),
+          ).toJson(),
+          record(
+            id: 'recent1',
+            decidedAt: now.subtract(const Duration(days: 5)),
+          ).toJson(),
+        ]),
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(home: DecisionLogScreen()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('30일이 지난 결정'), findsOneWidget);
+      expect(find.text('지난 결정'), findsOneWidget);
+      expect(find.text('잘 됐어요'), findsOneWidget);
+
+      await tester.tap(find.text('잘 됐어요'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('30일이 지난 결정'), findsNothing);
+      expect(find.text('지난 결정'), findsOneWidget);
+    });
+
+    testWidgets('기록이 없으면 빈 상태를 보여준다', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.pumpWidget(
+        const MaterialApp(home: DecisionLogScreen()),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('아직 저장된 결정이 없어요.'), findsOneWidget);
     });
   });
 }

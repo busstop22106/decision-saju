@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'models.dart';
+import 'screens/decision_log_screen.dart';
 import 'screens/family_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/saju_screen.dart';
@@ -77,6 +78,7 @@ class _MainShellState extends State<MainShell> {
         onAdd: _addMember,
         onRemove: _removeMember,
       ),
+      const DecisionLogScreen(),
     ];
     return Scaffold(
       body: _loading
@@ -100,6 +102,11 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(Icons.family_restroom_outlined),
             activeIcon: Icon(Icons.family_restroom),
             label: '가족 보관함',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history_outlined),
+            activeIcon: Icon(Icons.history),
+            label: '결정 일지',
           ),
         ],
       ),

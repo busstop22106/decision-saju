@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../engine/compat.dart';
 import '../engine/daily_fortune.dart';
 import '../models.dart';
+import '../services/decision_store.dart';
 import '../theme/app_theme.dart';
+import 'decision_log_screen.dart';
 import 'decision_report_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -60,6 +62,54 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  /// 30일이 지난 결정이 있으면 홈 맨 위에 되물음 배너를 보여준다.
+  Widget _dueFollowUpBanner(BuildContext context) {
+    return FutureBuilder<List<DecisionRecord>>(
+      future: DecisionStore.load().then((s) => s.dueFollowUps()),
+      builder: (context, snapshot) {
+        final due = snapshot.data ?? [];
+        if (due.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Card(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const DecisionLogScreen(),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.history, color: AppTheme.vermilion),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '30일 전 결정 ${due.length}개, 어떻게 됐어요?',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: AppTheme.vermilion,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -95,6 +145,7 @@ class HomeScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
+          _dueFollowUpBanner(context),
           if (members.isEmpty) ...[
             _sectionTitle(theme, '오늘의 운세'),
             Card(
