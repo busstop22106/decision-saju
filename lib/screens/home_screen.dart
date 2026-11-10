@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../engine/compat.dart';
 import '../engine/daily_fortune.dart';
+import '../engine/decision.dart';
 import '../models.dart';
 import '../services/decision_store.dart';
 import '../services/share_service.dart';
@@ -154,6 +155,11 @@ class HomeScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           _dueFollowUpBanner(context),
+          if (members.isNotEmpty) ...[
+            _sectionTitle(theme, '오늘의 결정 지수'),
+            _todayDecisionCard(context, members.first, now),
+            const SizedBox(height: 20),
+          ],
           if (members.isEmpty) ...[
             _sectionTitle(theme, '오늘의 운세'),
             Card(
@@ -342,6 +348,64 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 오늘의 결정 지수 요약 카드 — 홈 맨 위, 결론·점수 먼저.
+  /// 숫자와 한 줄 결론을 먼저 보여주고, 탭하면 리포트 만들기로 간다.
+  Widget _todayDecisionCard(
+    BuildContext context,
+    FamilyMember primary,
+    DateTime now,
+  ) {
+    final saju = sajuOfBirth(primary.birth, primary.birthHour);
+    final index = decisionIndex(saju, now);
+    final label = scoreLabel(index);
+    final line = index >= 65
+        ? '오늘은 결정을 내리기 좋은 날이에요.'
+        : index >= 50
+            ? '오늘은 무난한 날이에요. 큰 결정은 길일을 확인해 보세요.'
+            : '오늘은 결정을 미루면 좋은 날이에요. 길일 달력을 확인해 보세요.';
+    final theme = Theme.of(context);
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+        onTap: () => _openReportForm(context),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              Text(
+                '$index',
+                style: const TextStyle(
+                  color: AppTheme.vermilion,
+                  fontSize: 44,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${primary.name}님의 오늘 · $label',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(line, style: theme.textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppTheme.vermilion),
+            ],
+          ),
+        ),
       ),
     );
   }

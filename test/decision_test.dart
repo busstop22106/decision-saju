@@ -1,9 +1,11 @@
 import 'dart:convert';
 
+import 'package:decision_saju/engine/compat.dart';
 import 'package:decision_saju/engine/saju.dart';
 import 'package:decision_saju/engine/decision.dart';
 import 'package:decision_saju/models.dart';
 import 'package:decision_saju/screens/decision_log_screen.dart';
+import 'package:decision_saju/screens/home_screen.dart';
 import 'package:decision_saju/services/decision_store.dart';
 import 'package:decision_saju/services/share_service.dart';
 import 'package:flutter/material.dart';
@@ -381,6 +383,52 @@ void main() {
       expect(bytes[1], 0x50);
       expect(bytes[2], 0x4E);
       expect(bytes[3], 0x47);
+    });
+  });
+
+  group('HomeScreen 오늘의 결정 지수', () {
+    testWidgets('홈 맨 위에 오늘의 결정 지수 카드가 보인다', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final member = FamilyMember(
+        id: '1',
+        name: '진욱',
+        relation: '아빠',
+        gender: Gender.boy,
+        birth: DateTime(1987, 5, 20),
+        birthHour: 10,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HomeScreen(
+            members: [member],
+            onGoToFamily: () {},
+            onAddMember: (_) async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('오늘의 결정 지수'), findsOneWidget);
+      final saju = sajuOfBirth(member.birth, member.birthHour);
+      final index = decisionIndex(saju, DateTime.now());
+      expect(find.text('$index'), findsOneWidget);
+      // 운세 3줄 카드도 그대로 있다
+      expect(find.text('진욱님의 오늘'), findsOneWidget);
+    });
+
+    testWidgets('구성원이 없으면 결정 지수 카드가 안 보인다', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HomeScreen(
+            members: const [],
+            onGoToFamily: () {},
+            onAddMember: (_) async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('오늘의 결정 지수'), findsNothing);
     });
   });
 }
