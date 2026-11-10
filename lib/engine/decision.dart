@@ -116,6 +116,23 @@ String _dayReason(SajuResult saju, DateTime date) {
   return '오행 흐름이 안정적인 날';
 }
 
+/// 앞으로 [days]일 전체의 날짜별 점수를 날짜 순으로 돌려준다 (달력 뷰용).
+List<LuckyDay> dayScores(
+  SajuResult saju,
+  DateTime from, {
+  int days = 30,
+}) {
+  final start = DateTime(from.year, from.month, from.day);
+  return [
+    for (var i = 0; i < days; i++)
+      LuckyDay(
+        start.add(Duration(days: i)),
+        scoreDay(saju, start.add(Duration(days: i))),
+        _dayReason(saju, start.add(Duration(days: i))),
+      ),
+  ];
+}
+
 /// 앞으로 [days]일 중 점수가 가장 높은 날 [count]개를 날짜 순으로 돌려준다.
 List<LuckyDay> luckyDays(
   SajuResult saju,

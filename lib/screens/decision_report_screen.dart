@@ -11,6 +11,7 @@ import '../models.dart';
 import '../services/decision_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_member_sheet.dart';
+import 'lucky_days_screen.dart';
 
 const List<String> _topics = ['이직', '이사', '결혼', '개업', '출산', '기타'];
 
@@ -491,6 +492,21 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
                   Text(
                     '길일은 앞으로 30일 중 결정 지수가 가장 높은 날이에요.',
                     style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                LuckyDaysScreen(member: widget.member),
+                          ),
+                        );
+                      },
+                      child: const Text('30일 달력으로 보기'),
+                    ),
                   ),
                 ],
               ),

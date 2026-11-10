@@ -91,6 +91,19 @@ void main() {
       }
       expect(days.map((d) => d.score).contains(max), true);
     });
+
+    test('dayScores는 30일 전체를 날짜 순으로 돌려준다', () {
+      final all = dayScores(saju, from);
+      expect(all.length, 30);
+      for (var i = 0; i < 30; i++) {
+        expect(all[i].date, from.add(Duration(days: i)));
+        expect(all[i].score, scoreDay(saju, from.add(Duration(days: i))));
+      }
+      final top = luckyDays(saju, from);
+      for (final t in top) {
+        expect(all.map((d) => d.date).contains(t.date), true);
+      }
+    });
   });
 
   group('compareOptions', () {
