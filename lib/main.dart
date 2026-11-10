@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'models.dart';
@@ -5,6 +7,7 @@ import 'screens/decision_log_screen.dart';
 import 'screens/family_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/saju_screen.dart';
+import 'services/deep_link_service.dart';
 import 'services/family_store.dart';
 import 'theme/app_theme.dart';
 
@@ -36,11 +39,36 @@ class _MainShellState extends State<MainShell> {
   int _index = 0;
   List<FamilyMember> _members = [];
   bool _loading = true;
+  StreamSubscription<Uri>? _linkSub;
 
   @override
   void initState() {
     super.initState();
     _loadMembers();
+    _handleDeepLinks();
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
+  }
+
+  /// 들어오는 딥링크 처리 — 작명별에서 오면 가족 보관함 탭을 먼저 보여준다.
+  Future<void> _handleDeepLinks() async {
+    final initial = await getInitialDeepLink();
+    if (initial != null && mounted) {
+      _applyDeepLink(initial);
+    }
+    _linkSub = deepLinkStream.listen((uri) {
+      if (mounted) _applyDeepLink(uri);
+    });
+  }
+
+  void _applyDeepLink(Uri uri) {
+    if (parseDeepLink(uri) == DeepLinkRoute.family) {
+      setState(() => _index = 2);
+    }
   }
 
   Future<void> _loadMembers() async {

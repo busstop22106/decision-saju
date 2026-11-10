@@ -1,6 +1,12 @@
 import 'dart:convert';
 
+import 'package:decision_saju/data/glossary.dart';
+import 'package:decision_saju/data/policies.dart';
 import 'package:decision_saju/engine/compat.dart';
+import 'package:decision_saju/screens/policies_screen.dart';
+import 'package:decision_saju/services/deep_link_service.dart';
+import 'package:decision_saju/services/payment_service.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:decision_saju/engine/saju.dart';
 import 'package:decision_saju/engine/decision.dart';
 import 'package:decision_saju/models.dart';
@@ -383,6 +389,101 @@ void main() {
       expect(bytes[1], 0x50);
       expect(bytes[2], 0x4E);
       expect(bytes[3], 0x47);
+    });
+  });
+
+  group('deep_link', () {
+    test('작명별에서 오면 가족 보관함으로 간다', () {
+      expect(
+        parseDeepLink(Uri.parse('decision-saju://open?from=naming-star')),
+        DeepLinkRoute.family,
+      );
+      expect(
+        parseDeepLink(Uri.parse('decision-saju://open?tab=family')),
+        DeepLinkRoute.family,
+      );
+    });
+
+    test('그 외 링크는 홈으로 간다', () {
+      expect(
+        parseDeepLink(Uri.parse('decision-saju://open')),
+        DeepLinkRoute.home,
+      );
+      expect(
+        parseDeepLink(Uri.parse('decision-saju://open?from=other')),
+        DeepLinkRoute.home,
+      );
+      expect(
+        parseDeepLink(Uri.parse('https://example.com/open')),
+        DeepLinkRoute.home,
+      );
+    });
+  });
+
+  group('payment', () {
+    PurchaseDetails details(PurchaseStatus status) {
+      return PurchaseDetails(
+        productID: reportProductId,
+        purchaseID: 'test-purchase',
+        transactionDate: '2026-11-11',
+        status: status,
+        verificationData: PurchaseVerificationData(
+          localVerificationData: '',
+          serverVerificationData: '',
+          source: 'test',
+        ),
+      );
+    }
+
+    test('구매 상태를 결과로 바꾼다', () {
+      expect(mapPurchaseStatus(details(PurchaseStatus.purchased)),
+          PaymentResult.success);
+      expect(mapPurchaseStatus(details(PurchaseStatus.restored)),
+          PaymentResult.success);
+      expect(mapPurchaseStatus(details(PurchaseStatus.canceled)),
+          PaymentResult.cancelled);
+      expect(mapPurchaseStatus(details(PurchaseStatus.error)),
+          PaymentResult.error);
+    });
+
+    test('정책 문서는 4종이고 내용이 비어 있지 않다', () {
+      expect(policies.length, 4);
+      final titles = policies.map((p) => p.$1).toSet();
+      expect(titles.contains('환불정책'), true);
+      expect(titles.contains('개인정보처리방침'), true);
+      expect(titles.contains('이용약관'), true);
+      expect(titles.contains('재미·참고용 고지'), true);
+      for (final (_, body) in policies) {
+        expect(body.isNotEmpty, true);
+      }
+    });
+
+    testWidgets('정책 화면에 4종 제목이 보인다', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(home: PoliciesScreen()),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('재미·참고용 고지'), findsOneWidget);
+      expect(find.text('환불정책'), findsOneWidget);
+      expect(find.text('개인정보처리방침'), findsOneWidget);
+      // 목록 아래쪽 항목은 스크롤해야 보인다
+      await tester.scrollUntilVisible(find.text('이용약관'), 200);
+      await tester.pumpAndSettle();
+      expect(find.text('이용약관'), findsOneWidget);
+    });
+  });
+
+  group('glossary', () {
+    test('용어가 10개 이상이고 해설은 한 줄이다', () {
+      expect(glossary.length, greaterThanOrEqualTo(10));
+      final terms = glossary.map((e) => e.$1).toSet();
+      expect(terms.length, glossary.length); // 용어 중복 없음
+      for (final (term, desc) in glossary) {
+        expect(desc.isNotEmpty, true, reason: term);
+        expect(desc.length, lessThanOrEqualTo(60), reason: term);
+        expect(glossaryOf(term), desc);
+      }
+      expect(glossaryOf('없는용어'), isNull);
     });
   });
 

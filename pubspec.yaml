@@ -39,14 +39,9 @@ dependencies:
   shared_preferences: ^2.5.0
   share_plus: ^13.3.1
   gal: ^2.3.3
-
-  # 한옥 클래식 세리프 폰트 (Noto Serif KR) — 맥북에서 직접 넣는 단계:
-  # 1. Google Fonts에서 Noto Serif KR Regular(400)·Bold(700) TTF를 받는다.
-  # 2. assets/fonts/NotoSerifKR-Regular.ttf, assets/fonts/NotoSerifKR-Bold.ttf로 저장한다.
-  # 3. 아래 fonts: 주석을 풀고 flutter pub get을 실행한다.
-  # (폰트 파일은 바이너리라 VM 스냅샷 푸시로 올릴 수 없어서 이 단계는 맥북에서 한다.
-  #  파일이 없을 때는 기본 폰트로 폴백되며 빌드는 정상 동작한다.)
-
+  in_app_purchase: ^3.3.1
+  url_launcher: ^6.3.3
+  app_links: ^7.2.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

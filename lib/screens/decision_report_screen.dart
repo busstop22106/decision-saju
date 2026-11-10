@@ -1,7 +1,7 @@
-// 결정 리포트 — 주제·A/B 입력 → 결제 전 고지 → 리포트 화면
+// 결정 리포트 — 주제·A/B 입력 → 결제 전 고지 → 인앱결제 → 리포트 화면
 //
-// 결제(인앱결제) 연결은 플랜 8번 항목에서 한다. 지금은 결제 버튼을 누르면
-// "결제 연동 전 미리보기" 안내와 함께 리포트를 보여준다.
+// 인앱결제: lib/services/payment_service.dart (상품 ID decision_report_4900,
+// Play Console에서 직접 등록해야 함). 결제 성공 시에만 리포트를 연다.
 
 import 'package:flutter/material.dart';
 
@@ -9,11 +9,13 @@ import '../engine/compat.dart';
 import '../engine/decision.dart';
 import '../models.dart';
 import '../services/decision_store.dart';
+import '../services/payment_service.dart';
 import '../services/share_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_member_sheet.dart';
 import '../widgets/report_share_card.dart';
 import 'lucky_days_screen.dart';
+import 'policies_screen.dart';
 
 const List<String> _topics = ['이직', '이사', '결혼', '개업', '출산', '기타'];
 
@@ -122,30 +124,83 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
         ),
         actions: [
           TextButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const PoliciesScreen(),
+                ),
+              );
+            },
+            child: const Text('환불정책·약관 보기'),
+          ),
+          TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('취소'),
           ),
           FilledButton(
             onPressed: () {
               Navigator.of(context).pop();
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => DecisionReportScreen(
-                    member: _members[_memberIndex],
-                    topic: _topic,
-                    optionA: a,
-                    optionB: b,
-                    dateA: _dateA,
-                    dateB: _dateB,
-                  ),
-                ),
-              );
+              _payAndOpenReport(a, b);
             },
             child: const Text('4,900원 결제하고 보기'),
           ),
         ],
       ),
     );
+  }
+
+  /// 결제 → 성공 시에만 리포트를 연다.
+  Future<void> _payAndOpenReport(String a, String b) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('결제 준비 중이에요.'),
+          ],
+        ),
+      ),
+    );
+    final result = await PaymentService().buyReport();
+    if (!mounted) return;
+    Navigator.of(context).pop(); // 로딩 닫기
+    switch (result) {
+      case PaymentResult.success:
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => DecisionReportScreen(
+              member: _members[_memberIndex],
+              topic: _topic,
+              optionA: a,
+              optionB: b,
+              dateA: _dateA,
+              dateB: _dateB,
+            ),
+          ),
+        );
+      case PaymentResult.cancelled:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('결제를 취소했어요.')),
+        );
+      case PaymentResult.unavailable:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('지금은 스토어 결제를 쓸 수 없어요.')),
+        );
+      case PaymentResult.productNotFound:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('상품을 찾을 수 없어요. Play Console에 decision_report_4900 상품을 등록한 뒤 다시 시도해 주세요.'),
+            duration: Duration(seconds: 5),
+          ),
+        );
+      case PaymentResult.error:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('결제 중 문제가 생겼어요. 다시 시도해 주세요.')),
+        );
+    }
   }
 
   @override
@@ -374,20 +429,6 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          // 결제 연동 전 미리보기 안내 (플랜 8번에서 인앱결제 연결 후 제거)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.border),
-            ),
-            child: Text(
-              '미리보기 — 결제 연동 전이에요. 인앱결제는 8번 항목에서 연결합니다.',
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
-          const SizedBox(height: 16),
           // 결론 카드 — 결정 지수 + 결론 먼저
           Card(
             child: Padding(

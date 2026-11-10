@@ -7,11 +7,13 @@ import '../engine/daily_fortune.dart';
 import '../engine/decision.dart';
 import '../models.dart';
 import '../services/decision_store.dart';
+import '../services/deep_link_service.dart';
 import '../services/share_service.dart';
 import '../theme/app_theme.dart';
 import 'decision_log_screen.dart';
 import 'decision_report_screen.dart';
 import 'new_year_screen.dart';
+import 'policies_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final List<FamilyMember> members;
@@ -236,6 +238,20 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const PoliciesScreen(),
+                          ),
+                        );
+                      },
+                      child: const Text('환불정책·약관 보기'),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -341,6 +357,56 @@ class HomeScreen extends StatelessWidget {
                     child: OutlinedButton(
                       onPressed: onGoToFamily,
                       child: const Text('가족 보관함 관리'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          _sectionTitle(theme, '작명별에서 이어보기'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.star_outline, color: AppTheme.vermilion),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '아기 이름은 작명별에서',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '작명별에서 지은 이름의 사주를 여기서 이어서 볼 수 있어요. 작명별이 설치되어 있으면 바로 열리고, 없으면 스토어로 이동해요.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () async {
+                        final opened = await openNamingStar();
+                        if (!context.mounted) return;
+                        if (!opened) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('작명별을 열 수 없어요. 스토어에서 설치했는지 확인해 주세요.'),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('작명별 열기'),
                     ),
                   ),
                 ],

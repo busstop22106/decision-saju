@@ -6,6 +6,7 @@ import '../engine/compat.dart';
 import '../engine/saju.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
+import 'glossary_screen.dart';
 
 /// 오행별 점 색상 (밝은 한지 배경에서 잘 보이는 색)
 const Map<String, Color> _elementDotColors = {
@@ -83,7 +84,22 @@ class _SajuScreenState extends State<SajuScreen> {
     final saju = _currentSaju;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('만세력')),
+      appBar: AppBar(
+        title: const Text('만세력'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.menu_book_outlined),
+            tooltip: '용어 한 줄 해설',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const GlossaryScreen(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -203,7 +219,21 @@ class _SajuScreenState extends State<SajuScreen> {
             return Expanded(
               child: Column(
                 children: [
-                  Text(p.title, style: theme.textTheme.bodySmall),
+                  GestureDetector(
+                    onTap: () => showGlossaryTerm(context, p.title),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(p.title, style: theme.textTheme.bodySmall),
+                        const SizedBox(width: 2),
+                        const Icon(
+                          Icons.help_outline,
+                          size: 13,
+                          color: AppTheme.muted,
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Container(
                     width: 12,
@@ -250,14 +280,21 @@ class _SajuScreenState extends State<SajuScreen> {
               '일간',
               '${saju.dayMaster} (${elementNames[saju.dayElement] ?? saju.dayElement})',
               theme,
+              glossaryTerm: '일간',
             ),
-            _detailRow('신강 / 신약', saju.strongBody ? '신강' : '신약', theme),
+            _detailRow(
+              '신강 / 신약',
+              saju.strongBody ? '신강' : '신약',
+              theme,
+              glossaryTerm: '신강 / 신약',
+            ),
             _detailRow(
               '용신',
               saju.yongsin == null
                   ? '—'
                   : elementNames[saju.yongsin] ?? saju.yongsin!,
               theme,
+              glossaryTerm: '용신',
             ),
             _detailRow(
               '희신',
@@ -265,12 +302,14 @@ class _SajuScreenState extends State<SajuScreen> {
                   ? '—'
                   : elementNames[saju.huishin] ?? saju.huishin!,
               theme,
+              glossaryTerm: '희신',
             ),
             _detailRow(
               '부족한 오행',
               lacking.map((e) => elementNames[e] ?? e).join(', '),
               theme,
               last: true,
+              glossaryTerm: '오행',
             ),
           ],
         ),
@@ -279,12 +318,23 @@ class _SajuScreenState extends State<SajuScreen> {
   }
 
   Widget _detailRow(String label, String value, ThemeData theme,
-      {bool last = false}) {
+      {bool last = false, String? glossaryTerm}) {
     return Padding(
       padding: EdgeInsets.only(bottom: last ? 0 : 12),
       child: Row(
         children: [
           Text(label, style: theme.textTheme.bodySmall),
+          if (glossaryTerm != null) ...[
+            const SizedBox(width: 2),
+            GestureDetector(
+              onTap: () => showGlossaryTerm(context, glossaryTerm),
+              child: const Icon(
+                Icons.help_outline,
+                size: 14,
+                color: AppTheme.muted,
+              ),
+            ),
+          ],
           const Spacer(),
           Text(
             value,
