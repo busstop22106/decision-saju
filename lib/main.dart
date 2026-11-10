@@ -19,8 +19,6 @@ class DecisionSajuApp extends StatelessWidget {
     return MaterialApp(
       title: '결정사주',
       theme: AppTheme.theme,
-      darkTheme: AppTheme.theme,
-      themeMode: ThemeMode.dark,
       home: const MainShell(),
     );
   }

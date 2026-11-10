@@ -71,12 +71,28 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.nights_stay, color: AppTheme.gold, size: 20),
-            SizedBox(width: 6),
-            Text('결정사주'),
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: AppTheme.vermilion,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                '결',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Text('결정사주'),
           ],
         ),
       ),
@@ -121,7 +137,7 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.edit_note, color: AppTheme.gold),
+                      Icon(Icons.edit_note, color: AppTheme.vermilion),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -145,7 +161,7 @@ class HomeScreen extends StatelessWidget {
                       const Text(
                         '4,900원',
                         style: TextStyle(
-                          color: AppTheme.goldSoft,
+                          color: AppTheme.vermilionSoft,
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
                         ),
@@ -201,7 +217,7 @@ class HomeScreen extends StatelessWidget {
                         return Text(
                           '가장 잘 맞는 궁합 — ${best.a.name} × ${best.b.name} ${best.label}',
                           style: const TextStyle(
-                            color: AppTheme.goldSoft,
+                            color: AppTheme.vermilionSoft,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
@@ -249,7 +265,7 @@ class HomeScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.person_outline, color: AppTheme.gold),
+                const Icon(Icons.person_outline, color: AppTheme.vermilion),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -302,7 +318,7 @@ class HomeScreen extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: AppTheme.gold, size: 20),
+        Icon(icon, color: AppTheme.vermilion, size: 20),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -311,7 +327,7 @@ class HomeScreen extends StatelessWidget {
               Text(
                 label,
                 style: const TextStyle(
-                  color: AppTheme.goldSoft,
+                  color: AppTheme.vermilionSoft,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),

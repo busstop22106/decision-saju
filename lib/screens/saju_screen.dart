@@ -7,13 +7,13 @@ import '../engine/saju.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
 
-/// 오행별 점 색상 (다크 배경에서 잘 보이는 색)
+/// 오행별 점 색상 (밝은 한지 배경에서 잘 보이는 색)
 const Map<String, Color> _elementDotColors = {
   '목': Colors.green,
   '화': Colors.red,
   '토': Colors.amber,
-  '금': Colors.white,
-  '수': Colors.lightBlue,
+  '금': Color(0xFF8D7B3F),
+  '수': Colors.blue,
 };
 
 class SajuScreen extends StatefulWidget {

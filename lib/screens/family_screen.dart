@@ -127,7 +127,7 @@ class FamilyScreen extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.person, color: AppTheme.gold, size: 28),
+              const Icon(Icons.person, color: AppTheme.vermilion, size: 28),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -205,7 +205,7 @@ class FamilyScreen extends StatelessWidget {
                 Text(
                   label,
                   style: const TextStyle(
-                    color: AppTheme.goldSoft,
+                    color: AppTheme.vermilionSoft,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
