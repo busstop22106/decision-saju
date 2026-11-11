@@ -5,12 +5,15 @@
 // 한 달간 앱을 안 켠 상태에서는 오픈율이 급락하기 때문이다.
 //  1. 길일 당일 오전 8시 — "오늘은 길일이에요" (리마인드)
 //  2. 길일로부터 3일 뒤 오전 8시 — "어떻게 됐어요?" (결과 기록)
-//  3. 결정일로부터 30일 뒤 — "30일 전 결정, 어떻게 됐어요?" (장기 되물음)
+//  3. 결정일로부터 30일 뒤 오전 8시 — "30일 전 결정, 어떻게 됐어요?" (장기 되물음)
 
-/// 되물음 알림을 울릴 시간 — 결정한 날로부터 정확히 30일 뒤.
+/// 되물음 알림을 울릴 시간 — 결정한 날로부터 30일 뒤 오전 8시.
+/// 결정 시각 그대로 두면 23시에 결정한 사람은 30일 뒤 23시에 받는다.
 /// DecisionRecord.followUpDue(결정일 + 30일)와 같은 기준이다.
-DateTime followUpNotificationTime(DateTime decidedAt) =>
-    decidedAt.add(const Duration(days: 30));
+DateTime followUpNotificationTime(DateTime decidedAt) {
+  final d = decidedAt.add(const Duration(days: 30));
+  return DateTime(d.year, d.month, d.day, 8);
+}
 
 /// 기록 id에서 안정적인 알림 id를 만든다.
 /// 같은 기록은 항상 같은 알림 id라서, 답을 하거나 지울 때 정확히 취소할 수 있다.

@@ -72,11 +72,11 @@ class ScheduledCall {
 
 void main() {
   group('follow_up_notify 순수 로직', () {
-    test('알림 시간은 결정한 날로부터 정확히 30일 뒤다', () {
+    test('알림 시간은 결정한 날로부터 30일 뒤 오전 8시다', () {
       final decidedAt = DateTime(2026, 11, 11, 22, 30);
       expect(
         followUpNotificationTime(decidedAt),
-        DateTime(2026, 12, 11, 22, 30),
+        DateTime(2026, 12, 11, 8),
       );
     });
 
@@ -129,8 +129,9 @@ void main() {
       final now = DateTime.now();
       final rec = record('r1', now);
 
-      await service.scheduleFollowUp(rec);
+      final scheduled = await service.scheduleFollowUp(rec);
 
+      expect(scheduled, true);
       expect(fake.scheduled.length, 1);
       final call = fake.scheduled.first;
       expect(call.id, followUpNotificationId('r1'));
@@ -180,8 +181,9 @@ void main() {
         DateTime.now().subtract(const Duration(days: 31)),
       );
 
-      await service.scheduleFollowUp(old);
+      final scheduled = await service.scheduleFollowUp(old);
 
+      expect(scheduled, false);
       expect(fake.scheduled, isEmpty);
     });
 

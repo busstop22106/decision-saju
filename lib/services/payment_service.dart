@@ -13,6 +13,15 @@
 //  3. 되물음 루프의 목적이 재구매가 아니라 스토어 리뷰·공유 바이럴이 된다.
 // 한 번 결제하면 모든 결정 리포트를 무제한으로 볼 수 있고,
 // 가족 보관함도 3명에서 6명으로 확장된다. 구독 없음.
+//
+// [수정] 2026-11-11 코드 리뷰 반영:
+//  - 전역 purchaseStream 리스너(initGlobalListener)를 앱 시작 시 한 번만
+//    등록한다. buyPass/restorePass 때만 구독하면 결제 완료를 놓친다.
+//  - pending(결제 진행 중)은 완료가 아니다. 리스너에서 무시하고 기다린다.
+//    (기존에는 pending을 error로 끝내서 뒤의 purchased를 놓쳤다.)
+//  - 복원 구매도 확인(acknowledge)한다. 미확인 구매는 Play가 3일 뒤 환불한다.
+//  - restorePass 대기를 10초에서 3초로 줄였다. 미구매자는 빈 응답만 오므로
+//    길게 기다릴 이유가 없고, 앱 시작·리포트 진입을 막았다.
 
 import 'dart:async';
 
@@ -42,6 +51,7 @@ enum PaymentResult {
 }
 
 /// 구매 상태를 결과로 바꾼다 (순수 함수 — 테스트용).
+/// pending은 호출부(buyPass 리스너)에서 걸러지므로 여기로 오지 않는다.
 PaymentResult mapPurchaseStatus(PurchaseDetails details) {
   switch (details.status) {
     case PurchaseStatus.purchased:
@@ -71,6 +81,44 @@ class PaymentService {
 
   PaymentService([InAppPurchase? iap]) : _iap = iap ?? InAppPurchase.instance;
 
+  static bool _globalListening = false;
+
+  /// 앱 시작 시 한 번만 호출한다. 구매 스트림을 계속 구독하면서
+  /// 결제 완료·복원 구매를 놓치지 않고 확인(acknowledge)·해금한다.
+  /// buyPass/restorePass의 일회성 구독만으로는 결제 완료 시점을 놓친다.
+  /// 구독은 앱 생명주기 내내 유지한다 (취소하지 않는다).
+  static void initGlobalListener() {
+    if (_globalListening) return;
+    _globalListening = true;
+    final iap = InAppPurchase.instance;
+    iap.purchaseStream.listen(
+      (purchases) async {
+        for (final purchase in purchases) {
+          if (purchase.productID != reportProductId) continue;
+          if (purchase.status == PurchaseStatus.purchased ||
+              purchase.status == PurchaseStatus.restored) {
+            await _acknowledge(iap, purchase);
+            await _setPassUnlocked();
+          }
+        }
+      },
+      onError: (_) {},
+    );
+  }
+
+  /// 구매 확인(acknowledge). 이미 확인한 구매에 다시 불러도 무해하다.
+  /// 실패하면 다음 복원 때 다시 시도하므로 조용히 넘긴다.
+  static Future<void> _acknowledge(
+    InAppPurchase iap,
+    PurchaseDetails purchase,
+  ) async {
+    try {
+      await iap.completePurchase(purchase);
+    } catch (_) {
+      // 확인 실패는 다음 복원 때 다시 시도한다.
+    }
+  }
+
   /// 평생 패스를 샀는지 (기기 내 해금 플래그).
   static Future<bool> isPassUnlocked() async {
     final prefs = await SharedPreferences.getInstance();
@@ -86,9 +134,13 @@ class PaymentService {
   Future<bool> get isAvailable => _iap.isAvailable();
 
   /// 상품 정보를 불러온다. 스토어에 없으면 null.
+  /// 네트워크·스토어 오류면 예외를 던진다 (미등록과 구분하기 위해).
   Future<ProductDetails?> loadProduct() async {
     final response = await _iap.queryProductDetails({reportProductId});
-    if (response.error != null || response.productDetails.isEmpty) {
+    if (response.error != null) {
+      throw StateError('상품 조회 실패: ${response.error?.message}');
+    }
+    if (response.productDetails.isEmpty) {
       return null;
     }
     return response.productDetails.first;
@@ -97,14 +149,21 @@ class PaymentService {
   /// 평생 패스를 산 적이 있는지 스토어에서 확인하고, 있으면 해금한다.
   /// 기기 변경·앱 재설치 뒤 복원용이다. 비소모성이라 스토어 복원이 동작한다.
   /// restorePurchases를 부르면 복원된 구매가 purchaseStream으로 온다.
+  /// 이미 해금된 상태면 스토어를 부르지 않고 바로 true를 돌려준다.
   Future<bool> restorePass() async {
+    if (await isPassUnlocked()) return true;
     if (!await isAvailable) return false;
     final completer = Completer<bool>();
     late StreamSubscription<List<PurchaseDetails>> sub;
     sub = _iap.purchaseStream.listen(
       (purchases) {
-        if (hasPassPurchase(purchases) && !completer.isCompleted) {
-          completer.complete(true);
+        for (final purchase in purchases) {
+          if (purchase.productID != reportProductId) continue;
+          if (purchase.status == PurchaseStatus.purchased ||
+              purchase.status == PurchaseStatus.restored) {
+            unawaited(_acknowledge(_iap, purchase));
+            if (!completer.isCompleted) completer.complete(true);
+          }
         }
       },
       onError: (_) {
@@ -113,8 +172,10 @@ class PaymentService {
     );
     try {
       await _iap.restorePurchases();
+      // 복원 구매는 restorePurchases 뒤 바로 스트림으로 온다.
+      // 미구매자는 빈 응답만 오므로 3초만 기다린다.
       final has = await completer.future.timeout(
-        const Duration(seconds: 10),
+        const Duration(seconds: 3),
         onTimeout: () => false,
       );
       if (has) await _setPassUnlocked();
@@ -128,7 +189,13 @@ class PaymentService {
   /// 성공하면 해금 플래그를 켠다.
   Future<PaymentResult> buyPass() async {
     if (!await isAvailable) return PaymentResult.unavailable;
-    final product = await loadProduct();
+    ProductDetails? product;
+    try {
+      product = await loadProduct();
+    } catch (_) {
+      // 네트워크·스토어 오류는 미등록과 다르다.
+      return PaymentResult.error;
+    }
     if (product == null) return PaymentResult.productNotFound;
 
     final completer = Completer<PaymentResult>();
@@ -137,13 +204,15 @@ class PaymentService {
       (purchases) {
         for (final purchase in purchases) {
           if (purchase.productID != reportProductId) continue;
-          final result = mapPurchaseStatus(purchase);
+          // pending(결제 진행 중)은 완료가 아니다 — 무시하고 기다린다.
+          if (purchase.status == PurchaseStatus.pending) continue;
           if (purchase.status == PurchaseStatus.purchased ||
               purchase.status == PurchaseStatus.restored) {
             // 비소모성: completePurchase는 구매 확인(acknowledge)이다.
             // 소비가 아니라서 다시 사지 않아도 되고, 복원도 된다.
-            unawaited(_iap.completePurchase(purchase));
+            unawaited(_acknowledge(_iap, purchase));
           }
+          final result = mapPurchaseStatus(purchase);
           if (!completer.isCompleted) {
             completer.complete(result);
           }

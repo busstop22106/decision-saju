@@ -3,6 +3,8 @@
 // 인앱결제: lib/services/payment_service.dart (상품 ID decision_report_4900,
 // Play Console에서 직접 등록해야 함). 결제 성공 시에만 리포트를 연다.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../engine/compat.dart';
@@ -111,15 +113,12 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
       return;
     }
     // 평생 패스를 이미 샀으면 결제 없이 바로 리포트를 연다.
-    // 기기 변경·재설치 뒤면 스토어에서 구매를 복원해 해금한다.
-    var unlocked = await PaymentService.isPassUnlocked();
+    // 로컬 해금 플래그만 본다. 스토어 복원을 여기서 기다리면
+    // 미구매자는 매번 빈 응답을 기다리느라 진입이 늦어진다.
+    // 복원은 백그라운드로 돌리고, 복원되면 다음 진입부터 바로 열린다.
+    final unlocked = await PaymentService.isPassUnlocked();
     if (!unlocked) {
-      try {
-        unlocked = await PaymentService().restorePass();
-      } catch (_) {
-        // 복원 실패는 결제로 이어진다. 해금 플래그만 없으면 된다.
-        unlocked = false;
-      }
+      unawaited(PaymentService().restorePass());
     }
     if (!mounted) return;
     if (unlocked) {
@@ -203,13 +202,18 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text('결제 준비 중이에요.'),
-          ],
+      builder: (context) => const PopScope(
+        // 결제 중에는 뒤로가기로 닫히지 않게 한다.
+        // (다이얼로그만 닫히고 결제 완료 뒤 pop()이 폼 화면을 닫아버린다.)
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('결제 준비 중이에요.'),
+            ],
+          ),
         ),
       ),
     );
@@ -230,7 +234,7 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
       case PaymentResult.productNotFound:
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('상품을 찾을 수 없어요. Play Console에 decision_report_4900 상품을 등록한 뒤 다시 시도해 주세요.'),
+            content: Text('아직 결제 상품을 준비 중이에요. 잠시 뒤 다시 시도해 주세요.'),
             duration: Duration(seconds: 5),
           ),
         );
@@ -379,6 +383,7 @@ class DecisionReportScreen extends StatefulWidget {
 
 class _DecisionReportScreenState extends State<DecisionReportScreen> {
   bool _saved = false;
+  bool _saving = false;
   final _shareKey = GlobalKey();
 
   Future<void> _saveImage() async {
@@ -426,35 +431,56 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
     int index, {
     DateTime? firstLuckyDay,
   }) async {
-    final store = await DecisionStore.load();
-    final record = DecisionRecord(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      topic: widget.topic,
-      optionA: widget.optionA,
-      optionB: widget.optionB,
-      chosen: chosen,
-      decidedAt: DateTime.now(),
-      summary: summary,
-      index: index,
-    );
-    await store.add(record);
+    // 연타 방지 — 저장 중에는 다시 들어오지 않는다.
+    // (버튼도 _saving 동안 비활성화한다.)
+    if (_saving || _saved) return;
+    _saving = true;
+    if (mounted) setState(() {});
     try {
+      final store = await DecisionStore.load();
+      final record = DecisionRecord(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        topic: widget.topic,
+        optionA: widget.optionA,
+        optionB: widget.optionB,
+        chosen: chosen,
+        decidedAt: DateTime.now(),
+        summary: summary,
+        index: index,
+      );
+      await store.add(record);
       // 되물음 알림 3단계 예약 — 길일 당일 아침·길일 3일 뒤·결정 30일 뒤.
-      // 예약 실패가 저장까지 막으면 안 된다.
-      await followUpNotifications.scheduleFollowUp(
-        record,
-        luckyDay: firstLuckyDay,
+      // 예약 실패가 저장까지 막으면 안 된다. 예약 여부를 스낵바에 반영한다.
+      var scheduled = false;
+      try {
+        scheduled = await followUpNotifications.scheduleFollowUp(
+          record,
+          luckyDay: firstLuckyDay,
+        );
+      } catch (_) {
+        // 알림 없이 저장만 된다. 되물음은 인앱 배너가 대신 알린다.
+        scheduled = false;
+      }
+      if (!mounted) return;
+      setState(() => _saved = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            scheduled
+                ? '결정 기록에 저장했어요. 길일 당일과 3일 뒤, 30일 뒤에 다시 물어볼게요.'
+                : '결정 기록에 저장했어요. 알림 예약에 실패해서, 결정 일지에서 결과를 직접 기록해 주세요.',
+          ),
+        ),
       );
     } catch (_) {
-      // 알림 없이 저장만 된다. 되물음은 인앱 배너가 대신 알린다.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('저장에 실패했어요. 다시 시도해 주세요.')),
+      );
+    } finally {
+      _saving = false;
+      if (mounted) setState(() {});
     }
-    if (!mounted) return;
-    setState(() => _saved = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('결정 기록에 저장했어요. 길일 당일과 3일 뒤, 30일 뒤에 다시 물어볼게요.'),
-      ),
-    );
   }
 
   String _dateLabel(DateTime d) => '${d.month}월 ${d.day}일';
@@ -513,13 +539,15 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(
-                          '/ 100 · ${scoreLabel(index)}',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '/ 100 · ${scoreLabel(index)}',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ),
@@ -758,7 +786,7 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _saved
+              onPressed: (_saved || _saving)
                   ? null
                   : () => _saveRecord(
                         comparison.recommendation,

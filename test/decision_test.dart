@@ -160,10 +160,10 @@ void main() {
       expect(days.length, 3);
       expect(days[0].date.isBefore(days[1].date), true);
       for (final d in days) {
+        // 일지 충 감점(-20점)은 scoreDay 안에 들어 있다. 여기서 또 깎으면 안 된다.
         var expected = 100;
         for (final s in [saju, saju2]) {
-          var score = scoreDay(s, d.date);
-          if (dayBranchClashes(s, d.date)) score = (score - 20).clamp(0, 100);
+          final score = scoreDay(s, d.date);
           if (score < expected) expected = score;
         }
         expect(d.score, expected);
@@ -175,6 +175,159 @@ void main() {
 
     test('가족이 없으면 공통 길일도 없다', () {
       expect(familyLuckyDays([], from), isEmpty);
+    });
+  });
+
+  group('코드 리뷰 반영 (2026-11-11)', () {
+    test('일지 충인 날은 결정 지수가 20점 깎인다', () {
+      final baby = BabyInfo(
+        surname: '',
+        surnameHanja: '',
+        surnameStrokes: 0,
+        gender: Gender.boy,
+        birth: DateTime(1987, 5, 20),
+        birthHour: 10,
+      );
+      final saju = computeSaju(baby);
+      final from = DateTime(2026, 11, 10);
+      // 충인 날을 하나 찾는다.
+      DateTime? clashDay;
+      for (var i = 0; i < 60; i++) {
+        final d = DateTime(from.year, from.month, from.day + i);
+        if (dayBranchClashes(saju, d)) {
+          clashDay = d;
+          break;
+        }
+      }
+      expect(clashDay, isNotNull);
+      final d = clashDay!;
+      // 일지만 충하지 않는 쌍둥이 사주 — 나머지는 전부 같다.
+      const branches = [
+        '자',
+        '축',
+        '인',
+        '묘',
+        '진',
+        '사',
+        '오',
+        '미',
+        '신',
+        '유',
+        '술',
+        '해',
+      ];
+      final clashBranch = dayPillar(d).branch;
+      final twinBranch = branches.firstWhere(
+        (b) => !branchesClash(b, clashBranch),
+      );
+      final twin = SajuResult(
+        year: saju.year,
+        month: saju.month,
+        day: SajuPillar(saju.day.stem, twinBranch),
+        hour: saju.hour,
+        dayMaster: saju.dayMaster,
+        dayElement: saju.dayElement,
+        elementCounts: saju.elementCounts,
+        strongBody: saju.strongBody,
+        yongsin: saju.yongsin,
+        huishin: saju.huishin,
+        johu: saju.johu,
+        notes: saju.notes,
+      );
+      expect(dayBranchClashes(twin, d), false);
+      expect(scoreDay(twin, d) - scoreDay(saju, d), 20);
+    });
+
+    test('주의일 이유는 충이 상극보다 먼저 나온다', () {
+      final baby = BabyInfo(
+        surname: '',
+        surnameHanja: '',
+        surnameStrokes: 0,
+        gender: Gender.girl,
+        birth: DateTime(1990, 3, 15),
+        birthHour: 14,
+      );
+      final saju = computeSaju(baby);
+      final from = DateTime(2026, 11, 10);
+      // 충이면서 천간이 나를 극하는 날을 찾는다.
+      DateTime? target;
+      for (var i = 0; i < 120; i++) {
+        final d = DateTime(from.year, from.month, from.day + i);
+        final stemEl = stemElement(dayPillar(d).stem);
+        if (dayBranchClashes(saju, d) &&
+            controlsTo(stemEl, saju.dayElement)) {
+          target = d;
+          break;
+        }
+      }
+      expect(target, isNotNull);
+      final all = worstDays(saju, from, days: 120, count: 120);
+      final found = all.where((l) => l.date == target).toList();
+      expect(found.length, 1);
+      expect(found.first.reason, contains('충'));
+    });
+
+    test('가족 공통 길일 사유 문구는 점수 구간과 맞는다', () {
+      final baby1 = BabyInfo(
+        surname: '',
+        surnameHanja: '',
+        surnameStrokes: 0,
+        gender: Gender.girl,
+        birth: DateTime(1990, 3, 15),
+        birthHour: 14,
+      );
+      final baby2 = BabyInfo(
+        surname: '',
+        surnameHanja: '',
+        surnameStrokes: 0,
+        gender: Gender.boy,
+        birth: DateTime(1987, 5, 20),
+        birthHour: 10,
+      );
+      final days = familyLuckyDays(
+        [computeSaju(baby1), computeSaju(baby2)],
+        DateTime(2026, 11, 10),
+      );
+      expect(days.length, 3);
+      for (final d in days) {
+        if (d.score >= 65) {
+          expect(d.reason, contains('좋은 날'));
+        } else if (d.score >= 50) {
+          expect(d.reason, contains('무난한 날'));
+        } else {
+          expect(d.reason, contains('신중히'));
+        }
+      }
+    });
+
+    test('조후가 용신과 같아도 희신은 남는다', () {
+      // 2024년 생일을 훑어 조후==용신인 경우를 찾는다.
+      // 조후 개수 0이면 용신=조후 분기라 희신이 원래 없다. 그 경우는 제외한다.
+      var found = 0;
+      final start = DateTime(2024, 1, 1);
+      for (var i = 0; i < 366; i++) {
+        final birth = DateTime(start.year, start.month, start.day + i);
+        for (final gender in [Gender.boy, Gender.girl]) {
+          final baby = BabyInfo(
+            surname: '',
+            surnameHanja: '',
+            surnameStrokes: 0,
+            gender: gender,
+            birth: birth,
+            birthHour: 10,
+          );
+          final saju = computeSaju(baby);
+          final johu = saju.johu;
+          if (johu != null &&
+              johu == saju.yongsin &&
+              (saju.elementCounts[johu] ?? 0) > 0) {
+            found++;
+            expect(saju.huishin, isNotNull);
+            expect(saju.huishin, isNot(saju.yongsin));
+          }
+        }
+      }
+      expect(found, greaterThan(0));
     });
   });
 

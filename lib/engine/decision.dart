@@ -36,12 +36,19 @@ const List<String> _branches = [
 
 /// 특정 날짜의 일주(日柱). 23시 자시 보정은 하지 않는다 (날짜 기준).
 SajuPillar dayPillar(DateTime date) {
-  final anchor = DateTime(2000, 1, 1); // 무오일 (saju.dart와 같은 기준일)
-  final d = DateTime(date.year, date.month, date.day);
+  // UTC 날짜로 일수 차이를 구한다. 로컬 시간으로 구하면 DST 전환일에
+  // 하루가 어긋날 수 있다 (한국은 DST가 없어 영향이 작지만, 안전하게).
+  final anchor = DateTime.utc(2000, 1, 1); // 무오일 (saju.dart와 같은 기준일)
+  final d = DateTime.utc(date.year, date.month, date.day);
   final diff = d.difference(anchor).inDays;
   final idx = (((55 + diff - 1) % 60) + 60) % 60 + 1; // 1=갑자 … 55=무오
   return SajuPillar(_stems[(idx - 1) % 10], _branches[(idx - 1) % 12]);
 }
+
+/// 날짜에 [days]일을 더한다. Duration(days:)으로 더하면 DST 전환일에
+/// 같은 날짜가 두 번 나오거나 건너뛰므로, 달력 날짜로 직접 계산한다.
+DateTime _addDays(DateTime date, int days) =>
+    DateTime(date.year, date.month, date.day + days);
 
 /// 하루의 결정 지수 (0~100). 그날의 일진 오행이 내 사주와 얼마나 잘 맞는지.
 ///
@@ -68,6 +75,9 @@ int scoreDay(SajuResult saju, DateTime date) {
   if (yongsin != null && branchEl == yongsin) score += 12;
   if (johu != null && branchEl == johu) score += 5;
   if (controlsTo(branchEl, me)) score -= 5;
+  // 일지 충인 날은 피하는 날 — 가족 공통 길일과 같은 기준(-20점).
+  // (기존에는 개인 길일에만 감점이 없어 충인 날도 최고 길일로 추천됐다.)
+  if (dayBranchClashes(saju, date)) score -= 20;
 
   return score.clamp(0, 100);
 }
@@ -126,9 +136,9 @@ List<LuckyDay> dayScores(
   return [
     for (var i = 0; i < days; i++)
       LuckyDay(
-        start.add(Duration(days: i)),
-        scoreDay(saju, start.add(Duration(days: i))),
-        _dayReason(saju, start.add(Duration(days: i))),
+        _addDays(start, i),
+        scoreDay(saju, _addDays(start, i)),
+        _dayReason(saju, _addDays(start, i)),
       ),
   ];
 }
@@ -176,7 +186,7 @@ List<LuckyDay> luckyDays(
   final start = DateTime(from.year, from.month, from.day);
   final scored = <LuckyDay>[];
   for (var i = 0; i < days; i++) {
-    final d = start.add(Duration(days: i));
+    final d = _addDays(start, i);
     scored.add(LuckyDay(d, scoreDay(saju, d), _dayReason(saju, d)));
   }
   scored.sort((a, b) => b.score.compareTo(a.score));
@@ -206,14 +216,15 @@ String _cautionReason(SajuResult saju, DateTime date) {
   final branchEl = branchElement(pillar.branch);
   final me = saju.dayElement;
 
+  // 충이 상극보다 먼저다. 충인 날은 상극 문구가 아니라 충 문구가 나가야 한다.
+  if (dayBranchClashes(saju, date)) {
+    return '일지와 충하는 날이에요. 중요한 일은 다음 날로 미루는 게 좋아요.';
+  }
   if (controlsTo(stemEl, me)) {
     return '나를 극하는 ${elementNames[stemEl]} 기운이 강한 날이에요. 큰 결정은 피하세요.';
   }
   if (controlsTo(branchEl, me)) {
     return '나를 극하는 ${elementNames[branchEl]} 기운이 받쳐요. 무리한 약속은 잡지 않는 게 좋아요.';
-  }
-  if (dayBranchClashes(saju, date)) {
-    return '일지와 충하는 날이에요. 중요한 일은 다음 날로 미루는 게 좋아요.';
   }
   return '결정 지수가 낮은 날이에요. 큰 결정보다 작은 일부터 정리하세요.';
 }
@@ -229,7 +240,7 @@ List<LuckyDay> worstDays(
   final start = DateTime(from.year, from.month, from.day);
   final scored = <LuckyDay>[];
   for (var i = 0; i < days; i++) {
-    final d = start.add(Duration(days: i));
+    final d = _addDays(start, i);
     scored.add(LuckyDay(d, scoreDay(saju, d), _cautionReason(saju, d)));
   }
   scored.sort((a, b) => a.score.compareTo(b.score));
@@ -241,8 +252,8 @@ List<LuckyDay> worstDays(
 /// 우리 가족 공통 길일 — 가족 보관함에 등록된 모두에게 좋은 날 [count]개.
 ///
 /// 가족 점수는 구성원 중 가장 낮은 지수(가장 약한 고리)다. 한 명이라도
-/// 나쁜 날은 가족 공통 길일이 될 수 없다. 일지 충인 구성원이 있으면
-/// 그 구성원의 지수에서 20점을 깎고 본다.
+/// 나쁜 날은 가족 공통 길일이 될 수 없다. 일지 충 감점(-20점)은
+/// scoreDay 안에 들어 있다.
 List<LuckyDay> familyLuckyDays(
   List<SajuResult> sajus,
   DateTime from, {
@@ -253,16 +264,18 @@ List<LuckyDay> familyLuckyDays(
   final start = DateTime(from.year, from.month, from.day);
   final scored = <LuckyDay>[];
   for (var i = 0; i < days; i++) {
-    final d = start.add(Duration(days: i));
+    final d = _addDays(start, i);
     var familyScore = 100;
     for (final saju in sajus) {
-      var s = scoreDay(saju, d);
-      if (dayBranchClashes(saju, d)) s = (s - 20).clamp(0, 100);
+      final s = scoreDay(saju, d);
       if (s < familyScore) familyScore = s;
     }
+    // 점수 구간에 맞는 문구를 쓴다. 30점대도 "무난한 날"이 아니다.
     final reason = familyScore >= 65
         ? '가족 모두에게 좋은 날이에요 (가장 낮은 지수 $familyScore점)'
-        : '가족 모두에게 무난한 날이에요 (가장 낮은 지수 $familyScore점)';
+        : familyScore >= 50
+            ? '가족 모두에게 무난한 날이에요 (가장 낮은 지수 $familyScore점)'
+            : '가족 모두에게 신중히 살펴볼 날이에요 (가장 낮은 지수 $familyScore점)';
     scored.add(LuckyDay(d, familyScore, reason));
   }
   scored.sort((a, b) => b.score.compareTo(a.score));

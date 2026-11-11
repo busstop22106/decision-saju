@@ -90,12 +90,15 @@ class NotificationService {
 /// 결정 기록 시 되물음 알림을 예약한다. 최대 3단계다.
 ///  1. 길일 당일 오전 8시 리마인드 (luckyDay를 넘겼을 때만, 아직 안 지난 경우만)
 ///  2. 길일 3일 뒤 오전 8시 되물음 (아직 안 지난 경우만)
-///  3. 결정일 + 30일 되물음 (이미 30일이 지난 기록이면 예약하지 않는다 —
+///  3. 결정일 + 30일 오전 8시 되물음 (이미 30일이 지난 기록이면 예약하지 않는다 —
 ///     인앱 배너가 대신 알린다).
-Future<void> scheduleFollowUp(
+/// 하나라도 예약했으면 true, 아무것도 예약하지 않았으면 false를 돌려준다.
+/// (저장 화면의 스낵바 문구를 예약 여부와 맞추기 위해.)
+Future<bool> scheduleFollowUp(
   DecisionRecord record, {
   DateTime? luckyDay,
 }) async {
+  var scheduled = false;
   final now = DateTime.now();
   if (luckyDay != null) {
     final dayAt = luckyDayNotificationTime(luckyDay);
@@ -107,6 +110,7 @@ Future<void> scheduleFollowUp(
         scheduledAt: dayAt,
         payload: record.id,
       );
+      scheduled = true;
     }
     final earlyAt = earlyFollowUpNotificationTime(luckyDay);
     if (earlyAt.isAfter(now)) {
@@ -117,10 +121,11 @@ Future<void> scheduleFollowUp(
         scheduledAt: earlyAt,
         payload: record.id,
       );
+      scheduled = true;
     }
   }
   final at = followUpNotificationTime(record.decidedAt);
-  if (!at.isAfter(now)) return;
+  if (!at.isAfter(now)) return scheduled;
   await _scheduler.schedule(
     id: followUpNotificationId(record.id),
     title: followUpNotificationTitle(record.topic),
@@ -128,6 +133,7 @@ Future<void> scheduleFollowUp(
     scheduledAt: at,
     payload: record.id,
   );
+  return true;
 }
 
 /// 되물음에 답했거나 기록을 지웠으면 예약된 알림을 전부 취소한다.

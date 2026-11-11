@@ -160,8 +160,12 @@ SajuResult computeSaju(BabyInfo baby) {
 
   // ── 일주 (기준일 2000-01-01 = 무오) ──
   // dayDate는 위에서 23시 자시 보정이 끝난 기준일이다.
-  final anchor = DateTime(2000, 1, 1);
-  final diff = dayDate.difference(anchor).inDays;
+  // UTC 날짜로 일수 차이를 구한다. 로컬 시간으로 구하면 DST 전환일에
+  // 하루가 어긋날 수 있다 (한국은 DST가 없어 영향이 작지만, 안전하게).
+  final anchor = DateTime.utc(2000, 1, 1);
+  final dayDateUtc =
+      DateTime.utc(dayDate.year, dayDate.month, dayDate.day);
+  final diff = dayDateUtc.difference(anchor).inDays;
   final idx = (((55 + diff - 1) % 60) + 60) % 60 + 1; // 1=갑자 … 55=무오
   final dayStem = _stems[(idx - 1) % 10];
   final dayBranch = _branches[(idx - 1) % 12];
@@ -222,14 +226,20 @@ SajuResult computeSaju(BabyInfo baby) {
     final cands = <String>[_generates[me]!, _controls[me]!, controlledBy(me)!];
     cands.sort((a, b) => cnt(a).compareTo(cnt(b)));
     yongsin = cands.first;
-    huishin = johu ?? (cands.length > 1 ? cands[1] : null);
+    // 희신은 조후가 우선이지만, 조후가 용신과 같으면 다음 후보를 쓴다.
+    // (기존에는 조후가 용신과 같으면 희신이 null이 됐다.)
+    huishin = (johu != null && johu != yongsin)
+        ? johu
+        : (cands.length > 1 ? cands[1] : null);
   } else {
     // 생조(인성·비겁) 중 가장 부족한 오행
     // ignore: unnecessary_non_null_assertion
     final cands = <String>[generatedBy(me)!, me];
     cands.sort((a, b) => cnt(a).compareTo(cnt(b)));
     yongsin = cands.first;
-    huishin = johu ?? (cands.length > 1 ? cands[1] : null);
+    huishin = (johu != null && johu != yongsin)
+        ? johu
+        : (cands.length > 1 ? cands[1] : null);
   }
   if (huishin == yongsin) huishin = null;
 

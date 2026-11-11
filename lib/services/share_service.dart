@@ -21,6 +21,8 @@ Future<Uint8List?> capturePng(GlobalKey key) async {
   final boundary =
       context.findRenderObject() as RenderRepaintBoundary?;
   if (boundary == null) return null;
+  // 아직 그려지지 않았으면 toImage가 멈추거나 빈 이미지가 나온다.
+  if (boundary.debugNeedsPaint) return null;
   final image = await boundary.toImage(pixelRatio: 3.0);
   final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
   return byteData?.buffer.asUint8List();
@@ -33,7 +35,12 @@ Future<bool> savePngToGallery(Uint8List bytes, {String name = 'gyeoljeong-saju'}
     final granted = await Gal.requestAccess();
     if (!granted) return false;
   }
-  await Gal.putImageBytes(bytes, name: name);
+  try {
+    await Gal.putImageBytes(bytes, name: name);
+  } catch (_) {
+    // 저장 실패(권한·용량 등)는 false로 돌려준다. 호출부가 안내한다.
+    return false;
+  }
   return true;
 }
 

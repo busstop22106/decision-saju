@@ -20,6 +20,12 @@ void main() async {
   } catch (_) {
     // 알림 없이 시작한다. 30일 뒤 되물음은 인앱 배너가 대신 알린다.
   }
+  try {
+    // 구매 스트림 전역 구독 — 결제 완료·복원 구매를 놓치지 않는다.
+    PaymentService.initGlobalListener();
+  } catch (_) {
+    // 구독 실패는 결제 진입 때 다시 시도한다.
+  }
   runApp(const DecisionSajuApp());
 }
 
@@ -62,16 +68,15 @@ class _MainShellState extends State<MainShell> {
 
   Future<void> _loadMembers() async {
     // 평생 패스를 샀으면 가족 보관함 상한이 3명에서 6명으로 늘어난다.
-    // 기기 변경·재설치 뒤면 스토어에서 구매를 복원해 해금한다.
+    // 앱 시작에서는 로컬 해금 플래그만 본다. 스토어 복원을 여기서 기다리면
+    // 미구매자는 매번 빈 응답을 기다리느라 시작이 늦어진다.
     var maxMembers = FamilyStore.maxMembers;
     try {
-      var unlocked = await PaymentService.isPassUnlocked();
-      if (!unlocked) {
-        unlocked = await PaymentService().restorePass();
+      if (await PaymentService.isPassUnlocked()) {
+        maxMembers = FamilyStore.maxMembersUnlocked;
       }
-      if (unlocked) maxMembers = FamilyStore.maxMembersUnlocked;
     } catch (_) {
-      // 복원 실패는 무료 상한으로 시작한다.
+      // 플래그 읽기 실패는 무료 상한으로 시작한다.
     }
     final members = await FamilyStore.load(maxMembers: maxMembers);
     if (!mounted) return;
@@ -80,6 +85,23 @@ class _MainShellState extends State<MainShell> {
       _maxMembers = maxMembers;
       _loading = false;
     });
+    // 백그라운드 복원 — 기기 변경·재설치 뒤면 해금하고 상한을 올린다.
+    // 시작을 막지 않는다. 복원되면 보관함을 다시 읽어 6명으로 넓힌다.
+    if (maxMembers == FamilyStore.maxMembers) {
+      unawaited(
+        PaymentService().restorePass().then((restored) async {
+          if (!restored || !mounted) return;
+          final reloaded = await FamilyStore.load(
+            maxMembers: FamilyStore.maxMembersUnlocked,
+          );
+          if (!mounted) return;
+          setState(() {
+            _members = reloaded;
+            _maxMembers = FamilyStore.maxMembersUnlocked;
+          });
+        }),
+      );
+    }
   }
 
   Future<void> _addMember(FamilyMember member) async {
