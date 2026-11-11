@@ -23,6 +23,12 @@
 
 > **푸시 완료 (2026-11-11 08:55):** 7~10번을 한 커밋(4d814ea1)으로 통합 푸시 완료. 원격 head 4d814ea1.
 
+## 추가 작업 — GitHub Actions APK 빌드 (2026-11-11)
+
+- 워크플로우 파일: `docs/android-apk-workflow.yml` (main 푸시마다 + 수동 실행, analyze·테스트·릴리스 APK 빌드 후 Artifacts에 업로드, 보관 30일).
+- 스냅샷 푸시는 `.github/workflows/` 파일을 올릴 수 없어서, 맥북에서 `docs/android-apk-workflow.yml`을 `.github/workflows/android-apk.yml`로 복사해 커밋·푸시해야 Actions가 동작한다 (작명별·DROP THE BEAT와 같은 방식).
+- 이 워크플로우의 APK는 디버그 키 서명 릴리스 빌드라 실기기 테스트용. 스토어 업로드용 AAB는 업로드 키스토어 생성 후 서명 단계 추가 필요.
+
 ## 1. 결정 리포트 유료 흐름 (4,900원 일회성) ✅ (2026-11-10, 커밋 a27f84cf)
 
 - **목표:** "결정할 때 켜는 앱"의 핵심 상품. 결론 1줄 + 결정 지수(점수)를 맨 위에, 근거 3줄, 30일 길일 3개, 오늘 피할 것 1개.

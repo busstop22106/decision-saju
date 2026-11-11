@@ -1,0 +1,64 @@
+# Android APK 빌드 워크플로우
+#
+# 주의: GitHub 커넥터 스냅샷 푸시는 .github/workflows/ 파일을 올릴 수 없다.
+# 이 파일을 맥북에서 .github/workflows/android-apk.yml 로 복사한 뒤
+# 커밋·푸시하면, 이후 main 푸시마다 Actions가 APK를 빌드한다.
+# (작명별·DROP THE BEAT도 같은 방식으로 워크플로우를 관리한다.)
+#
+# 맥북에서 할 일:
+#   cd ~/jino/decision-saju
+#   git pull
+#   mkdir -p .github/workflows
+#   cp docs/android-apk-workflow.yml .github/workflows/android-apk.yml
+#   git add .github/workflows/android-apk.yml
+#   git commit -m "Actions: APK 빌드 워크플로우 추가"
+#   git push
+# 이후 GitHub 저장소 Actions 탭에서 빌드 결과를 확인하고,
+# 빌드된 APK를 Artifacts에서 내려받을 수 있다.
+#
+# 참고: 이 워크플로우가 만드는 APK는 디버그 키로 서명한 릴리스 빌드라
+# 실기기 테스트용이다. 스토어 업로드용 AAB는 업로드 키스토어를 만든 뒤
+# 별도 서명 단계를 추가해야 한다.
+
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.x"
+          channel: stable
+
+      - name: 의존성 설치
+        run: flutter pub get
+
+      - name: 정적 분석
+        run: flutter analyze
+
+      - name: 테스트
+        run: flutter test
+
+      - name: APK 빌드
+        run: flutter build apk --release
+
+      - name: APK 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: decision-saju-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
