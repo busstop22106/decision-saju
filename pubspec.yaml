@@ -67,7 +67,7 @@ flutter:
   uses-material-design: true
   fonts:
   - family: Noto Serif KR
-    fonts:ㄴ
+    fonts:
       - asset: assets/fonts/NotoSerifKR-Regular.ttf
       - asset: assets/fonts/NotoSerifKR-Bold.ttf
         weight: 700
