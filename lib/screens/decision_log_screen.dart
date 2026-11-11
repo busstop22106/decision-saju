@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../models.dart';
 import '../services/decision_store.dart';
 import '../services/notification_service.dart';
+import '../services/review_prompt.dart';
 import '../theme/app_theme.dart';
 
 class DecisionLogScreen extends StatefulWidget {
@@ -47,6 +48,23 @@ class _DecisionLogScreenState extends State<DecisionLogScreen> {
     }
     await _load();
     if (!mounted) return;
+    // 잘 된 결정이면 한 번만 스토어 별점을 부탁한다.
+    // 평생 패스 모델에서는 되물음 루프의 목적이 재구매가 아니라 리뷰·공유다.
+    final showReview = await ReviewPrompt.shouldShow(answer);
+    if (!mounted) return;
+    if (showReview) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('결정이 잘 됐다니 다행이에요. 스토어 별점이 큰 힘이 돼요.'),
+          action: SnackBarAction(
+            label: '별점 남기기',
+            onPressed: () => reviewPrompt.prompt(),
+          ),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('기록했어요. 다음 결정에도 참고할게요.')),
     );

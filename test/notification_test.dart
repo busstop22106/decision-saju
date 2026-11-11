@@ -102,10 +102,28 @@ void main() {
       expect(followUpNotificationBody('기타'), contains('결정'));
       expect(followUpNotificationBody('기타'), isNot(contains('기타')));
     });
+
+    test('길일 당일·3일 뒤 알림 id는 D+30 id와 다르고, 시각은 오전 8시다', () {
+      final luckyDay = DateTime(2026, 11, 20, 15, 30);
+      expect(luckyDayNotificationTime(luckyDay), DateTime(2026, 11, 20, 8));
+      expect(
+        earlyFollowUpNotificationTime(luckyDay),
+        DateTime(2026, 11, 23, 8),
+      );
+      final ids = {
+        followUpNotificationId('r1'),
+        luckyDayNotificationId('r1'),
+        earlyFollowUpNotificationId('r1'),
+      };
+      expect(ids.length, 3);
+      expect(luckyDayNotificationTitle(), '오늘은 길일이에요');
+      expect(earlyFollowUpNotificationTitle('이직'), contains('이직'));
+      expect(luckyDayNotificationBody('이직'), contains('길일'));
+    });
   });
 
   group('NotificationService 예약·취소', () {
-    test('결정을 저장하면 30일 뒤 알림이 1건 예약된다', () async {
+    test('결정을 저장하면 30일 뒤 알림이 1건 예약된다 (길일 없음)', () async {
       final fake = FakeScheduler();
       final service = NotificationService(scheduler: fake);
       final now = DateTime.now();
@@ -121,6 +139,39 @@ void main() {
       expect(call.payload, 'r1');
     });
 
+    test('길일을 넘기면 길일 당일·3일 뒤·30일 뒤 3건이 예약된다', () async {
+      final fake = FakeScheduler();
+      final service = NotificationService(scheduler: fake);
+      final now = DateTime.now();
+      final rec = record('r1', now);
+      final luckyDay = now.add(const Duration(days: 5));
+
+      await service.scheduleFollowUp(rec, luckyDay: luckyDay);
+
+      expect(fake.scheduled.length, 3);
+      final byId = {for (final c in fake.scheduled) c.id: c};
+      final dayCall = byId[luckyDayNotificationId('r1')]!;
+      expect(dayCall.scheduledAt, luckyDayNotificationTime(luckyDay));
+      expect(dayCall.title, '오늘은 길일이에요');
+      final earlyCall = byId[earlyFollowUpNotificationId('r1')]!;
+      expect(earlyCall.scheduledAt, earlyFollowUpNotificationTime(luckyDay));
+      expect(earlyCall.title, '그 이직 결정, 어떻게 됐어요?');
+      final lateCall = byId[followUpNotificationId('r1')]!;
+      expect(lateCall.scheduledAt, followUpNotificationTime(now));
+    });
+
+    test('이미 지난 길일은 당일·3일 뒤 알림을 예약하지 않는다', () async {
+      final fake = FakeScheduler();
+      final service = NotificationService(scheduler: fake);
+      final rec = record('r1', DateTime.now());
+      final oldLuckyDay = DateTime.now().subtract(const Duration(days: 10));
+
+      await service.scheduleFollowUp(rec, luckyDay: oldLuckyDay);
+
+      expect(fake.scheduled.length, 1);
+      expect(fake.scheduled.first.id, followUpNotificationId('r1'));
+    });
+
     test('이미 30일이 지난 기록은 예약하지 않는다', () async {
       final fake = FakeScheduler();
       final service = NotificationService(scheduler: fake);
@@ -134,13 +185,17 @@ void main() {
       expect(fake.scheduled, isEmpty);
     });
 
-    test('되물음에 답하거나 기록을 지우면 예약된 알림이 취소된다', () async {
+    test('되물음에 답하거나 기록을 지우면 예약된 알림 3건이 모두 취소된다', () async {
       final fake = FakeScheduler();
       final service = NotificationService(scheduler: fake);
 
       await service.cancelFollowUp('r1');
 
-      expect(fake.cancelled, [followUpNotificationId('r1')]);
+      expect(fake.cancelled, [
+        luckyDayNotificationId('r1'),
+        earlyFollowUpNotificationId('r1'),
+        followUpNotificationId('r1'),
+      ]);
     });
 
     test('initialize를 부르면 스케줄러 초기화가 1번 돈다', () async {

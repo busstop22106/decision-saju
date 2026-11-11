@@ -185,6 +185,92 @@ List<LuckyDay> luckyDays(
   return top;
 }
 
+/// 지지 육충(六沖) — 마주 보는 지지끼리 충한다 (자↔오, 축↔미, 인↔신,
+/// 묘↔유, 진↔술, 사↔해). 그날의 지지와 내 일지가 충이면 그날은 피하는 날이다.
+bool branchesClash(String a, String b) {
+  final ai = _branches.indexOf(a);
+  final bi = _branches.indexOf(b);
+  if (ai < 0 || bi < 0) return false;
+  return (ai - bi).abs() == 6;
+}
+
+/// 그날의 지지가 내 일지와 충하는지.
+bool dayBranchClashes(SajuResult saju, DateTime date) {
+  return branchesClash(dayPillar(date).branch, saju.day.branch);
+}
+
+/// 주의일 1개의 이유 — 왜 피해야 하는 날인지.
+String _cautionReason(SajuResult saju, DateTime date) {
+  final pillar = dayPillar(date);
+  final stemEl = stemElement(pillar.stem);
+  final branchEl = branchElement(pillar.branch);
+  final me = saju.dayElement;
+
+  if (controlsTo(stemEl, me)) {
+    return '나를 극하는 ${elementNames[stemEl]} 기운이 강한 날이에요. 큰 결정은 피하세요.';
+  }
+  if (controlsTo(branchEl, me)) {
+    return '나를 극하는 ${elementNames[branchEl]} 기운이 받쳐요. 무리한 약속은 잡지 않는 게 좋아요.';
+  }
+  if (dayBranchClashes(saju, date)) {
+    return '일지와 충하는 날이에요. 중요한 일은 다음 날로 미루는 게 좋아요.';
+  }
+  return '결정 지수가 낮은 날이에요. 큰 결정보다 작은 일부터 정리하세요.';
+}
+
+/// 앞으로 [days]일 중 점수가 가장 낮은 날 [count]개를 날짜 순으로 돌려준다.
+/// 좋은 날만큼 "피해야 할 날"도 의사결정자에게는 가치가 크다.
+List<LuckyDay> worstDays(
+  SajuResult saju,
+  DateTime from, {
+  int days = 30,
+  int count = 2,
+}) {
+  final start = DateTime(from.year, from.month, from.day);
+  final scored = <LuckyDay>[];
+  for (var i = 0; i < days; i++) {
+    final d = start.add(Duration(days: i));
+    scored.add(LuckyDay(d, scoreDay(saju, d), _cautionReason(saju, d)));
+  }
+  scored.sort((a, b) => a.score.compareTo(b.score));
+  final bottom = scored.take(count).toList()
+    ..sort((a, b) => a.date.compareTo(b.date));
+  return bottom;
+}
+
+/// 우리 가족 공통 길일 — 가족 보관함에 등록된 모두에게 좋은 날 [count]개.
+///
+/// 가족 점수는 구성원 중 가장 낮은 지수(가장 약한 고리)다. 한 명이라도
+/// 나쁜 날은 가족 공통 길일이 될 수 없다. 일지 충인 구성원이 있으면
+/// 그 구성원의 지수에서 20점을 깎고 본다.
+List<LuckyDay> familyLuckyDays(
+  List<SajuResult> sajus,
+  DateTime from, {
+  int days = 30,
+  int count = 3,
+}) {
+  if (sajus.isEmpty) return [];
+  final start = DateTime(from.year, from.month, from.day);
+  final scored = <LuckyDay>[];
+  for (var i = 0; i < days; i++) {
+    final d = start.add(Duration(days: i));
+    var familyScore = 100;
+    for (final saju in sajus) {
+      var s = scoreDay(saju, d);
+      if (dayBranchClashes(saju, d)) s = (s - 20).clamp(0, 100);
+      if (s < familyScore) familyScore = s;
+    }
+    final reason = familyScore >= 65
+        ? '가족 모두에게 좋은 날이에요 (가장 낮은 지수 $familyScore점)'
+        : '가족 모두에게 무난한 날이에요 (가장 낮은 지수 $familyScore점)';
+    scored.add(LuckyDay(d, familyScore, reason));
+  }
+  scored.sort((a, b) => b.score.compareTo(a.score));
+  final top = scored.take(count).toList()
+    ..sort((a, b) => a.date.compareTo(b.date));
+  return top;
+}
+
 /// A/B 양자택일 비교 결과.
 class DecisionComparison {
   /// 'A' | 'B' | '비슷함'

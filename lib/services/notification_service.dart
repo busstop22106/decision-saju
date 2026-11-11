@@ -87,24 +87,55 @@ class NotificationService {
 
   Future<void> initialize() => _scheduler.initialize();
 
-  /// 결정 기록 시 30일 뒤 되물음 알림을 예약한다.
-  /// 이미 30일이 지난 기록이면 예약하지 않는다 (인앱 배너가 대신 알린다).
-  Future<void> scheduleFollowUp(DecisionRecord record) async {
-    final at = followUpNotificationTime(record.decidedAt);
-    if (!at.isAfter(DateTime.now())) return;
-    await _scheduler.schedule(
-      id: followUpNotificationId(record.id),
-      title: followUpNotificationTitle(record.topic),
-      body: followUpNotificationBody(record.topic),
-      scheduledAt: at,
-      payload: record.id,
-    );
+/// 결정 기록 시 되물음 알림을 예약한다. 최대 3단계다.
+///  1. 길일 당일 오전 8시 리마인드 (luckyDay를 넘겼을 때만, 아직 안 지난 경우만)
+///  2. 길일 3일 뒤 오전 8시 되물음 (아직 안 지난 경우만)
+///  3. 결정일 + 30일 되물음 (이미 30일이 지난 기록이면 예약하지 않는다 —
+///     인앱 배너가 대신 알린다).
+Future<void> scheduleFollowUp(
+  DecisionRecord record, {
+  DateTime? luckyDay,
+}) async {
+  final now = DateTime.now();
+  if (luckyDay != null) {
+    final dayAt = luckyDayNotificationTime(luckyDay);
+    if (dayAt.isAfter(now)) {
+      await _scheduler.schedule(
+        id: luckyDayNotificationId(record.id),
+        title: luckyDayNotificationTitle(),
+        body: luckyDayNotificationBody(record.topic),
+        scheduledAt: dayAt,
+        payload: record.id,
+      );
+    }
+    final earlyAt = earlyFollowUpNotificationTime(luckyDay);
+    if (earlyAt.isAfter(now)) {
+      await _scheduler.schedule(
+        id: earlyFollowUpNotificationId(record.id),
+        title: earlyFollowUpNotificationTitle(record.topic),
+        body: earlyFollowUpNotificationBody(record.topic),
+        scheduledAt: earlyAt,
+        payload: record.id,
+      );
+    }
   }
+  final at = followUpNotificationTime(record.decidedAt);
+  if (!at.isAfter(now)) return;
+  await _scheduler.schedule(
+    id: followUpNotificationId(record.id),
+    title: followUpNotificationTitle(record.topic),
+    body: followUpNotificationBody(record.topic),
+    scheduledAt: at,
+    payload: record.id,
+  );
+}
 
-  /// 되물음에 답했거나 기록을 지웠으면 예약된 알림을 취소한다.
-  Future<void> cancelFollowUp(String recordId) async {
-    await _scheduler.cancel(followUpNotificationId(recordId));
-  }
+/// 되물음에 답했거나 기록을 지웠으면 예약된 알림을 전부 취소한다.
+Future<void> cancelFollowUp(String recordId) async {
+  await _scheduler.cancel(luckyDayNotificationId(recordId));
+  await _scheduler.cancel(earlyFollowUpNotificationId(recordId));
+  await _scheduler.cancel(followUpNotificationId(recordId));
+}
 }
 
 /// 앱 전역에서 쓰는 기본 인스턴스.

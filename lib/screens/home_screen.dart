@@ -215,7 +215,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'A/B 양자택일 결론 + 근거 3줄 · 30일 길일 3개 · 오늘 피할 것 1개 · 30일 뒤 되물음',
+                    'A/B 양자택일 결론 + 근거 3줄 · 30일 길일 3개 · 가족 공통 길일 · 조심할 날 2개 · 길일 당일·3일 뒤·30일 뒤 되물음',
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 14),
@@ -230,7 +230,7 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Text('일회성 · 구독 없음', style: theme.textTheme.bodySmall),
+                      Text('한 번만 결제 · 무제한', style: theme.textTheme.bodySmall),
                       const Spacer(),
                       FilledButton(
                         onPressed: () => _openReportForm(context),
@@ -315,7 +315,7 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   if (members.isEmpty)
                     Text(
-                      '아직 저장된 가족이 없어요. 최대 3명까지 저장할 수 있어요.',
+                      '아직 저장된 가족이 없어요. 최대 3명까지 저장할 수 있어요. 결정 패스(4,900원 한 번 결제)를 사면 6명까지 늘어나요.',
                       style: theme.textTheme.bodySmall,
                     )
                   else ...[

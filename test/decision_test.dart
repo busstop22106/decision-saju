@@ -115,6 +115,70 @@ void main() {
     });
   });
 
+  group('worstDays · familyLuckyDays', () {
+    final baby = BabyInfo(
+      surname: '',
+      surnameHanja: '',
+      surnameStrokes: 0,
+      gender: Gender.girl,
+      birth: DateTime(1990, 3, 15),
+      birthHour: 14,
+    );
+    final saju = computeSaju(baby);
+    final from = DateTime(2026, 11, 10);
+
+    test('육충은 마주 보는 지지끼리만 충한다', () {
+      expect(branchesClash('자', '오'), true);
+      expect(branchesClash('인', '신'), true);
+      expect(branchesClash('자', '자'), false);
+      expect(branchesClash('자', '축'), false);
+    });
+
+    test('주의일은 2개, 날짜 순, 30일 중 가장 낮은 점수 2개다', () {
+      final worst = worstDays(saju, from);
+      expect(worst.length, 2);
+      expect(worst[0].date.isBefore(worst[1].date), true);
+      final scores = [
+        for (var i = 0; i < 30; i++) scoreDay(saju, from.add(Duration(days: i))),
+      ]..sort();
+      expect(worst.map((d) => d.score).toSet(), {scores[0], scores[1]});
+      for (final d in worst) {
+        expect(d.reason, isNotEmpty);
+      }
+    });
+
+    test('가족 공통 길일은 구성원 중 가장 낮은 지수가 점수다', () {
+      final baby2 = BabyInfo(
+        surname: '',
+        surnameHanja: '',
+        surnameStrokes: 0,
+        gender: Gender.boy,
+        birth: DateTime(1987, 5, 20),
+        birthHour: 10,
+      );
+      final saju2 = computeSaju(baby2);
+      final days = familyLuckyDays([saju, saju2], from);
+      expect(days.length, 3);
+      expect(days[0].date.isBefore(days[1].date), true);
+      for (final d in days) {
+        var expected = 100;
+        for (final s in [saju, saju2]) {
+          var score = scoreDay(s, d.date);
+          if (dayBranchClashes(s, d.date)) score = (score - 20).clamp(0, 100);
+          if (score < expected) expected = score;
+        }
+        expect(d.score, expected);
+        // 한 명이라도 나쁜 날은 가족 길일이 될 수 없다.
+        expect(d.score, lessThanOrEqualTo(scoreDay(saju, d.date)));
+        expect(d.score, lessThanOrEqualTo(scoreDay(saju2, d.date)));
+      }
+    });
+
+    test('가족이 없으면 공통 길일도 없다', () {
+      expect(familyLuckyDays([], from), isEmpty);
+    });
+  });
+
   group('yearMonthScores', () {
     final baby = BabyInfo(
       surname: '',
@@ -446,6 +510,41 @@ void main() {
           PaymentResult.error);
     });
 
+    test('평생 패스 구매는 구매·복원 상태일 때만 인정한다', () {
+      expect(hasPassPurchase([details(PurchaseStatus.purchased)]), true);
+      expect(hasPassPurchase([details(PurchaseStatus.restored)]), true);
+      expect(hasPassPurchase([details(PurchaseStatus.canceled)]), false);
+      expect(hasPassPurchase([details(PurchaseStatus.error)]), false);
+      expect(hasPassPurchase([]), false);
+      final other = PurchaseDetails(
+        productID: 'some_other_product',
+        purchaseID: 'x',
+        transactionDate: '2026-11-11',
+        status: PurchaseStatus.purchased,
+        verificationData: PurchaseVerificationData(
+          localVerificationData: '',
+          serverVerificationData: '',
+          source: 'test',
+        ),
+      );
+      expect(hasPassPurchase([other]), false);
+    });
+
+    test('해금 플래그가 있으면 패스를 산 것으로 본다', () async {
+      SharedPreferences.setMockInitialValues({reportPassUnlockKey: true});
+      expect(await PaymentService.isPassUnlocked(), true);
+      SharedPreferences.setMockInitialValues({});
+      expect(await PaymentService.isPassUnlocked(), false);
+    });
+
+    test('환불정책에 만세력 계산 기준이 명시돼 있다', () {
+      final refund = policies[1];
+      expect(refund.$1, '환불정책');
+      expect(refund.$2, contains('진태양시'));
+      expect(refund.$2, contains('23시'));
+      expect(refund.$2, contains('계산 오류가 아니에요'));
+    });
+
     test('정책 문서는 4종이고 내용이 비어 있지 않다', () {
       expect(policies.length, 4);
       final titles = policies.map((p) => p.$1).toSet();
@@ -465,8 +564,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('재미·참고용 고지'), findsOneWidget);
       expect(find.text('환불정책'), findsOneWidget);
+      // 목록 아래쪽 항목은 스크롤해야 보인다 (환불정책 본문이 길어짐)
+      await tester.scrollUntilVisible(find.text('개인정보처리방침'), 200);
+      await tester.pumpAndSettle();
       expect(find.text('개인정보처리방침'), findsOneWidget);
-      // 목록 아래쪽 항목은 스크롤해야 보인다
       await tester.scrollUntilVisible(find.text('이용약관'), 200);
       await tester.pumpAndSettle();
       expect(find.text('이용약관'), findsOneWidget);

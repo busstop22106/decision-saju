@@ -48,6 +48,7 @@ class _LuckyDaysScreenState extends State<LuckyDaysScreen> {
     final saju = sajuOfBirth(widget.member.birth, widget.member.birthHour);
     final days = dayScores(saju, today);
     final top3 = luckyDays(saju, today);
+    final worst2 = worstDays(saju, today);
     final topDates = top3.map((d) => d.date).toSet();
     final selectedDay =
         days.firstWhere((d) => d.date == DateTime(
@@ -263,6 +264,59 @@ class _LuckyDaysScreenState extends State<LuckyDaysScreen> {
                   ],
                   Text(
                     '길일은 앞으로 30일 중 결정 지수가 가장 높은 날이에요.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _sectionTitle(theme, '조심할 날 2개'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final day in worst2) ...[
+                    InkWell(
+                      onTap: () => setState(() => _selected = day.date),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.warning_amber,
+                              color: AppTheme.vermilion,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${_dateLabel(day.date)} · ${day.score}점',
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  Text(
+                                    day.reason,
+                                    style: theme.textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+                  Text(
+                    '이 날은 큰 결정을 미루는 게 좋아요.',
                     style: theme.textTheme.bodySmall,
                   ),
                 ],

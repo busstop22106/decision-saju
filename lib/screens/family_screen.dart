@@ -1,4 +1,4 @@
-// 가족 보관함 — 구성원 최대 3명 저장 + 쌍별 띠 궁합 요약
+// 가족 보관함 — 구성원 최대 3명 저장(평생 패스 구매 시 6명) + 쌍별 띠 궁합 요약
 
 import 'package:flutter/material.dart';
 
@@ -11,12 +11,16 @@ import '../services/family_store.dart';
 
 class FamilyScreen extends StatelessWidget {
   final List<FamilyMember> members;
+
+  /// 가족 보관함 상한 (무료 3명, 평생 패스 구매 시 6명).
+  final int maxMembers;
   final Future<void> Function(FamilyMember member) onAdd;
   final Future<void> Function(String id) onRemove;
 
   const FamilyScreen({
     super.key,
     required this.members,
+    this.maxMembers = FamilyStore.maxMembers,
     required this.onAdd,
     required this.onRemove,
   });
@@ -73,12 +77,12 @@ class FamilyScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final full = members.length >= FamilyStore.maxMembers;
+    final full = members.length >= maxMembers;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          '가족 보관함 ${members.length}/${FamilyStore.maxMembers}',
+          '가족 보관함 ${members.length}/$maxMembers',
         ),
       ),
       body: ListView(
@@ -108,7 +112,13 @@ class FamilyScreen extends StatelessWidget {
               onPressed:
                   full ? null : () => _openAddSheet(context),
               icon: const Icon(Icons.person_add_outlined),
-              label: Text(full ? '무료 보관함은 3명까지예요' : '구성원 추가'),
+              label: Text(
+                full
+                    ? maxMembers > FamilyStore.maxMembers
+                        ? '보관함은 6명까지예요'
+                        : '3명까지예요 · 패스로 6명 확장'
+                    : '구성원 추가',
+              ),
             ),
           ),
         ],

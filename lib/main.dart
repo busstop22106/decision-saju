@@ -10,6 +10,7 @@ import 'screens/saju_screen.dart';
 import 'services/deep_link_service.dart';
 import 'services/family_store.dart';
 import 'services/notification_service.dart';
+import 'services/payment_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -46,6 +47,7 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _index = 0;
   List<FamilyMember> _members = [];
+  int _maxMembers = FamilyStore.maxMembers;
   bool _loading = true;
   StreamSubscription<Uri>? _linkSub;
 
@@ -80,21 +82,36 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<void> _loadMembers() async {
-    final members = await FamilyStore.load();
+    // 평생 패스를 샀으면 가족 보관함 상한이 3명에서 6명으로 늘어난다.
+    // 기기 변경·재설치 뒤면 스토어에서 구매를 복원해 해금한다.
+    var maxMembers = FamilyStore.maxMembers;
+    try {
+      var unlocked = await PaymentService.isPassUnlocked();
+      if (!unlocked) {
+        unlocked = await PaymentService().restorePass();
+      }
+      if (unlocked) maxMembers = FamilyStore.maxMembersUnlocked;
+    } catch (_) {
+      // 복원 실패는 무료 상한으로 시작한다.
+    }
+    final members = await FamilyStore.load(maxMembers: maxMembers);
     if (!mounted) return;
     setState(() {
       _members = members;
+      _maxMembers = maxMembers;
       _loading = false;
     });
   }
 
   Future<void> _addMember(FamilyMember member) async {
-    final next = await FamilyStore.add(_members, member);
+    final next =
+        await FamilyStore.add(_members, member, maxMembers: _maxMembers);
     setState(() => _members = next);
   }
 
   Future<void> _removeMember(String id) async {
-    final next = await FamilyStore.remove(_members, id);
+    final next =
+        await FamilyStore.remove(_members, id, maxMembers: _maxMembers);
     setState(() => _members = next);
   }
 
@@ -111,6 +128,7 @@ class _MainShellState extends State<MainShell> {
       SajuScreen(members: _members),
       FamilyScreen(
         members: _members,
+        maxMembers: _maxMembers,
         onAdd: _addMember,
         onRemove: _removeMember,
       ),

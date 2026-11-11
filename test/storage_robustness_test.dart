@@ -93,6 +93,24 @@ void main() {
       expect((await FamilyStore.load()).length, 3);
     });
 
+    test('평생 패스 상한 6명이면 6명까지 저장·추가된다', () async {
+      SharedPreferences.setMockInitialValues({});
+      final six = [
+        for (var i = 1; i <= 6; i++) member('$i', '구성원$i'),
+      ];
+      await FamilyStore.save(six, maxMembers: FamilyStore.maxMembersUnlocked);
+      final loaded = await FamilyStore.load(
+        maxMembers: FamilyStore.maxMembersUnlocked,
+      );
+      expect(loaded.length, 6);
+      final over = await FamilyStore.add(
+        loaded,
+        member('7', '구성원7'),
+        maxMembers: FamilyStore.maxMembersUnlocked,
+      );
+      expect(over.length, 6);
+    });
+
     test('없는 id를 지워도 기존 목록이 유지된다', () async {
       SharedPreferences.setMockInitialValues({});
       final two = [member('1', '진욱'), member('2', '지혜')];

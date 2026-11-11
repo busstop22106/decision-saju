@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../models.dart';
+import '../theme/app_theme.dart';
 
 class AddMemberSheet extends StatefulWidget {
   final void Function(FamilyMember member) onSave;
@@ -163,6 +164,11 @@ class _AddMemberSheetState extends State<AddMemberSheet> {
               onPressed: _save,
               child: const Text('저장'),
             ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            '간이 만세력 기준: 진태양시 보정을 적용하지 않고 입력한 시간을 그대로 쓰며, 23시 이후 출생은 다음날 기준으로 계산해요.',
+            style: TextStyle(fontSize: 12, color: AppTheme.muted),
           ),
         ],
       ),

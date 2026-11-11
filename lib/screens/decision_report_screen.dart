@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../engine/compat.dart';
 import '../engine/decision.dart';
+import '../engine/saju.dart';
 import '../models.dart';
 import '../services/decision_store.dart';
 import '../services/notification_service.dart';
@@ -100,7 +101,7 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
     }
   }
 
-  void _showNotice() {
+  void _showNotice() async {
     final a = _optionAController.text.trim();
     final b = _optionBController.text.trim();
     if (a.isEmpty || b.isEmpty) {
@@ -109,18 +110,49 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
       );
       return;
     }
+    // 평생 패스를 이미 샀으면 결제 없이 바로 리포트를 연다.
+    // 기기 변경·재설치 뒤면 스토어에서 구매를 복원해 해금한다.
+    var unlocked = await PaymentService.isPassUnlocked();
+    if (!unlocked) {
+      try {
+        unlocked = await PaymentService().restorePass();
+      } catch (_) {
+        // 복원 실패는 결제로 이어진다. 해금 플래그만 없으면 된다.
+        unlocked = false;
+      }
+    }
+    if (!mounted) return;
+    if (unlocked) {
+      _openReport(a, b);
+      return;
+    }
+    // 결제 전 티저 — 실제 계산 결과를 일부만 미리 보여준다.
+    // 결정 지수 2개 + 용신 1줄은 무료로, 길일 날짜·나머지 근거·가족 공통
+    // 길일은 결제 뒤에 확인할 수 있다.
+    final member = _members[_memberIndex];
+    final saju = sajuOfBirth(member.birth, member.birthHour);
+    final preview = compareOptions(saju, _dateA, _dateB);
+    final yongsinLine = saju.yongsin != null
+        ? '용신은 ${elementNames[saju.yongsin]} 기운이에요.'
+        : '부족한 오행은 ${lackingElements(saju.elementCounts).map((e) => elementNames[e]).join('·')}이에요.';
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('결정 리포트 만들기'),
-        content: const Text(
-          '이 리포트에 포함되는 것\n'
+        content: Text(
+          '지금 계산해 본 결과\n'
+          '· A안 (${_dateLabel(_dateA)}) 결정 지수 ${preview.scoreA}점\n'
+          '· B안 (${_dateLabel(_dateB)}) 결정 지수 ${preview.scoreB}점\n'
+          '· $yongsinLine\n\n'
+          '결제하면 확인할 수 있어요\n'
           '· A/B 양자택일 결론 1줄 + 결정 지수\n'
           '· 근거 3줄 (용신·일진·대운)\n'
-          '· 30일 길일 3개\n'
-          '· 오늘 피할 것 1개\n'
-          '· 결정 기록 + 30일 뒤 되물음\n\n'
-          '가격 4,900원 · 일회성 · 구독 없음 · 추가 결제 없음\n\n'
+          '· 30일 길일 3개 + 우리 가족 공통 길일\n'
+          '· 조심할 날 2개 · 오늘 피할 것 1개\n'
+          '· 결정 기록 + 길일 당일·3일 뒤·30일 뒤 되물음\n\n'
+          '가격 4,900원 · 한 번만 결제 · 구독 없음\n'
+          '결제 후 모든 결정 리포트를 무제한으로 볼 수 있고, '
+          '가족 보관함도 6명까지 쓸 수 있어요.\n\n'
           '사주는 참고용이에요. 결과를 보장하지 않으며, 계산 오류가 있으면 환불해 드려요.',
         ),
         actions: [
@@ -143,9 +175,25 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
               Navigator.of(context).pop();
               _payAndOpenReport(a, b);
             },
-            child: const Text('4,900원 결제하고 보기'),
+            child: const Text('4,900원 한 번 결제하고 보기'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _openReport(String a, String b) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DecisionReportScreen(
+          member: _members[_memberIndex],
+          family: _members,
+          topic: _topic,
+          optionA: a,
+          optionB: b,
+          dateA: _dateA,
+          dateB: _dateB,
+        ),
       ),
     );
   }
@@ -165,23 +213,12 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
         ),
       ),
     );
-    final result = await PaymentService().buyReport();
+    final result = await PaymentService().buyPass();
     if (!mounted) return;
     Navigator.of(context).pop(); // 로딩 닫기
     switch (result) {
       case PaymentResult.success:
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => DecisionReportScreen(
-              member: _members[_memberIndex],
-              topic: _topic,
-              optionA: a,
-              optionB: b,
-              dateA: _dateA,
-              dateB: _dateB,
-            ),
-          ),
-        );
+        _openReport(a, b);
       case PaymentResult.cancelled:
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('결제를 취소했어요.')),
@@ -316,6 +353,9 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
 /// 결정 리포트 결과 화면 — 결론·결정 지수 먼저, 근거 3줄, 길일 3개, 오늘 피할 것.
 class DecisionReportScreen extends StatefulWidget {
   final FamilyMember member;
+
+  /// 가족 보관함 전체 (우리 가족 공통 길일 계산용). 없으면 빈 목록.
+  final List<FamilyMember> family;
   final String topic;
   final String optionA;
   final String optionB;
@@ -325,6 +365,7 @@ class DecisionReportScreen extends StatefulWidget {
   const DecisionReportScreen({
     super.key,
     required this.member,
+    this.family = const [],
     required this.topic,
     required this.optionA,
     required this.optionB,
@@ -382,8 +423,9 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
   Future<void> _saveRecord(
     String chosen,
     String summary,
-    int index,
-  ) async {
+    int index, {
+    DateTime? firstLuckyDay,
+  }) async {
     final store = await DecisionStore.load();
     final record = DecisionRecord(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -397,15 +439,21 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
     );
     await store.add(record);
     try {
-      // 30일 뒤 되물음 알림 예약. 예약 실패가 저장까지 막으면 안 된다.
-      await followUpNotifications.scheduleFollowUp(record);
+      // 되물음 알림 3단계 예약 — 길일 당일 아침·길일 3일 뒤·결정 30일 뒤.
+      // 예약 실패가 저장까지 막으면 안 된다.
+      await followUpNotifications.scheduleFollowUp(
+        record,
+        luckyDay: firstLuckyDay,
+      );
     } catch (_) {
-      // 알림 없이 저장만 된다. 30일 뒤 되물음은 인앱 배너가 대신 알린다.
+      // 알림 없이 저장만 된다. 되물음은 인앱 배너가 대신 알린다.
     }
     if (!mounted) return;
     setState(() => _saved = true);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('결정 기록에 저장했어요. 30일 뒤에 다시 물어볼게요.')),
+      const SnackBar(
+        content: Text('결정 기록에 저장했어요. 길일 당일과 3일 뒤, 30일 뒤에 다시 물어볼게요.'),
+      ),
     );
   }
 
@@ -419,6 +467,15 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
     final index = decisionIndex(saju, now);
     final comparison = compareOptions(saju, widget.dateA, widget.dateB);
     final lucky = luckyDays(saju, now);
+    final worst = worstDays(saju, now);
+    final familyLucky = widget.family.length > 1
+        ? familyLuckyDays(
+            widget.family
+                .map((m) => sajuOfBirth(m.birth, m.birthHour))
+                .toList(),
+            now,
+          )
+        : <LuckyDay>[];
     final evidence = evidenceLines(_baby, saju, now);
     final avoid = avoidLine(saju, now);
 
@@ -601,6 +658,102 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
               child: Text(avoid, style: theme.textTheme.bodyMedium),
             ),
           ),
+          if (familyLucky.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _sectionTitle(theme, '우리 가족 공통 길일'),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final day in familyLucky) ...[
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.groups,
+                            color: AppTheme.vermilion,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${_dateLabel(day.date)} · ${day.score}점',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  day.reason,
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    Text(
+                      '가족 보관함에 등록된 모두에게 좋은 날이에요. 이사·계약·여행·돌잔치처럼 가족이 함께 결정할 때 참고하세요.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          _sectionTitle(theme, '조심할 날 2개'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final day in worst) ...[
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber,
+                          color: AppTheme.vermilion,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${_dateLabel(day.date)} · ${day.score}점',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                day.reason,
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  Text(
+                    '좋은 날만큼 피해야 할 날도 중요해요. 이 날은 큰 결정을 미루는 게 좋아요.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
@@ -611,13 +764,15 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
                         comparison.recommendation,
                         conclusion,
                         index,
+                        firstLuckyDay:
+                            lucky.isNotEmpty ? lucky.first.date : null,
                       ),
               child: Text(_saved ? '결정 기록에 저장했어요' : '결정 기록에 저장하기'),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            '저장하면 30일 뒤 "그 결정, 어떻게 됐어요?"라고 다시 물어봐요.',
+            '저장하면 길일 당일 아침과 3일 뒤, 30일 뒤에 "그 결정, 어떻게 됐어요?"라고 다시 물어봐요.',
             style: theme.textTheme.bodySmall,
             textAlign: TextAlign.center,
           ),
