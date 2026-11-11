@@ -37,6 +37,9 @@ class DecisionSajuApp extends StatelessWidget {
     return MaterialApp(
       title: '결정사주',
       theme: AppTheme.theme,
+      // 라이트 전용 앱이다. 폰이 다크 모드여도 라이트 테마를 쓴다.
+      darkTheme: AppTheme.theme,
+      themeMode: ThemeMode.light,
       home: const MainShell(),
     );
   }

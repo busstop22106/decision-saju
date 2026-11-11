@@ -68,28 +68,37 @@ class AppTheme {
             displayColor: ink,
           )
           .copyWith(
+            // 주의: copyWith는 스타일을 통째로 교체하므로 색을 안 적으면
+            // apply()로 준 ink 색이 사라져 색이 null이 된다. 색 없는 글자는
+            // 실기기에서 흰색으로 보여 안 보인다(2026-11-11 실기기 확인).
+            // 모든 스타일에 색을 명시할 것.
             headlineSmall: const TextStyle(
               fontFamily: serifFamily,
+              color: ink,
               fontSize: 22,
               fontWeight: FontWeight.w800,
             ),
             titleLarge: const TextStyle(
               fontFamily: serifFamily,
+              color: ink,
               fontSize: 18,
               fontWeight: FontWeight.w700,
             ),
             titleMedium: const TextStyle(
               fontFamily: serifFamily,
+              color: ink,
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
             bodyLarge: const TextStyle(
               fontFamily: serifFamily,
+              color: ink,
               fontSize: 15,
               height: 1.6,
             ),
             bodyMedium: const TextStyle(
               fontFamily: serifFamily,
+              color: ink,
               fontSize: 14,
               height: 1.6,
             ),
@@ -136,6 +145,9 @@ class AppTheme {
           ),
         ),
       ),
+      // TextButton은 따로 테마가 없으면 textTheme.labelLarge 색(onAccent,
+      // 주홍 위 글자용 크림색)을 그대로 쓴다. 배경이 종이색이면 글자가
+      // 안 보여서(2026-11-11 실기기 확인) 주홍 글자로 명시한다.
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: vermilion,

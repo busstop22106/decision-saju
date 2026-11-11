@@ -378,11 +378,12 @@ bool _isYangStem(String stem) => _stems.indexOf(stem) % 2 == 0;
 
 /// 대운 시작 나이 (1~10). 순행은 출생일부터 다음 절기까지, 역행은
 /// 이전 절기까지의 일수 ÷ 3. [forward]가 false면 역행 기준이다.
+///
+/// 날짜 차이만 필요하므로 UTC로 계산한다. 로컬 시간대로 계산하면
+/// 일광절약시간(DST)이 있던 해에는 difference().inDays가 하루 적게 나온다.
+/// (예: 한국은 1987년 5월 10일에 DST를 시행했고, 1987-05-06→05-20은
+/// 13일 23시간이라 inDays가 13이 돼 역행 대운수가 5세가 아니라 4세가 됐다.)
 int daewoonStartAge(DateTime birth, {bool forward = true}) {
-  // 날짜 차이만 필요하므로 UTC로 계산한다. 로컬 시간대로 계산하면
-  // 일광절약시간(DST)이 있던 해에는 difference().inDays가 하루 적게 나온다.
-  // (예: 한국은 1987년 5월 10일에 DST를 시행했고, 1987-05-06→05-20은
-  // 13일 23시간이라 inDays가 13이 돼 역행 대운수가 5세가 아니라 4세가 됐다.)
   final b = DateTime.utc(birth.year, birth.month, birth.day);
   DateTime term;
   if (forward) {
