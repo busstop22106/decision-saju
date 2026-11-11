@@ -9,6 +9,7 @@ import '../engine/compat.dart';
 import '../engine/decision.dart';
 import '../models.dart';
 import '../services/decision_store.dart';
+import '../services/notification_service.dart';
 import '../services/payment_service.dart';
 import '../services/share_service.dart';
 import '../theme/app_theme.dart';
@@ -395,6 +396,12 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
       index: index,
     );
     await store.add(record);
+    try {
+      // 30일 뒤 되물음 알림 예약. 예약 실패가 저장까지 막으면 안 된다.
+      await followUpNotifications.scheduleFollowUp(record);
+    } catch (_) {
+      // 알림 없이 저장만 된다. 30일 뒤 되물음은 인앱 배너가 대신 알린다.
+    }
     if (!mounted) return;
     setState(() => _saved = true);
     ScaffoldMessenger.of(context).showSnackBar(

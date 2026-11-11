@@ -9,9 +9,17 @@ import 'screens/home_screen.dart';
 import 'screens/saju_screen.dart';
 import 'services/deep_link_service.dart';
 import 'services/family_store.dart';
+import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    // 알림 초기화에 실패해도 앱은 정상 시작한다.
+    await followUpNotifications.initialize();
+  } catch (_) {
+    // 알림 없이 시작한다. 30일 뒤 되물음은 인앱 배너가 대신 알린다.
+  }
   runApp(const DecisionSajuApp());
 }
 

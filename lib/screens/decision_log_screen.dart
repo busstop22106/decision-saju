@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../models.dart';
 import '../services/decision_store.dart';
+import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 
 class DecisionLogScreen extends StatefulWidget {
@@ -39,6 +40,11 @@ class _DecisionLogScreenState extends State<DecisionLogScreen> {
 
   Future<void> _answer(String id, String answer) async {
     await _store?.answerFollowUp(id, answer);
+    try {
+      await followUpNotifications.cancelFollowUp(id);
+    } catch (_) {
+      // 알림 취소 실패가 답 저장을 막으면 안 된다.
+    }
     await _load();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -66,6 +72,11 @@ class _DecisionLogScreenState extends State<DecisionLogScreen> {
     );
     if (confirmed != true) return;
     await _store?.remove(id);
+    try {
+      await followUpNotifications.cancelFollowUp(id);
+    } catch (_) {
+      // 알림 취소 실패가 삭제를 막으면 안 된다.
+    }
     await _load();
   }
 
