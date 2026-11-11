@@ -21,6 +21,12 @@ class NewYearScreen extends StatefulWidget {
 
 class _NewYearScreenState extends State<NewYearScreen> {
   late int _year;
+  // 칩 목록 기준 연도. _year를 기준으로 삼으면 이전 해 칩을 누를 때마다
+  // 목록이 바뀌어 누른 칩이 가운데로 이동한다. 진입 연도로 고정한다.
+  late final int _baseYear;
+  // 1년치(365일) 점수 계산은 build마다 하지 않고 연도가 바뀔 때만 한다.
+  late SajuResult _saju;
+  late List<YearMonthScore> _months;
 
   @override
   void initState() {
@@ -28,6 +34,13 @@ class _NewYearScreenState extends State<NewYearScreen> {
     final now = DateTime.now();
     // 11~12월에는 다가올 해를, 그 외에는 올해를 기본으로 보여준다.
     _year = now.month >= 11 ? now.year + 1 : now.year;
+    _baseYear = _year;
+    _saju = sajuOfBirth(widget.member.birth, widget.member.birthHour);
+    _recompute();
+  }
+
+  void _recompute() {
+    _months = yearMonthScores(_saju, _year);
   }
 
   String _dateLabel(DateTime d) => '${d.month}월 ${d.day}일';
@@ -35,8 +48,7 @@ class _NewYearScreenState extends State<NewYearScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final saju = sajuOfBirth(widget.member.birth, widget.member.birthHour);
-    final months = yearMonthScores(saju, _year);
+    final months = _months;
     final sorted = [...months]..sort((a, b) => b.avgScore.compareTo(a.avgScore));
     final bestMonths = sorted.take(3).toList();
     final worstMonths = sorted.reversed.take(2).toList();
@@ -48,16 +60,18 @@ class _NewYearScreenState extends State<NewYearScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              for (final y in [_year - 1, _year, _year + 1])
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text('$y년'),
-                    selected: _year == y,
-                    onSelected: (_) => setState(() => _year = y),
-                  ),
+              for (final y in [_baseYear - 1, _baseYear, _baseYear + 1])
+                ChoiceChip(
+                  label: Text('$y년'),
+                  selected: _year == y,
+                  onSelected: (_) => setState(() {
+                    _year = y;
+                    _recompute();
+                  }),
                 ),
             ],
           ),
@@ -90,13 +104,15 @@ class _NewYearScreenState extends State<NewYearScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 4),
-                        child: Text(
-                          '/ 100 · 올해의 결정 지수',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
+                      const Flexible(
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '/ 100 · 올해의 결정 지수',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ),
@@ -164,9 +180,11 @@ class _NewYearScreenState extends State<NewYearScreen> {
               padding: const EdgeInsets.all(18),
               child: Column(
                 children: [
-                  for (final m in months) ...[
-                    _monthBar(m),
-                    if (m.month < 12) const SizedBox(height: 10),
+                  for (var i = 0; i < months.length; i++) ...[
+                    _monthBar(months[i]),
+                    // 마지막 항목 뒤에는 간격을 두지 않는다.
+                    // 월 숫자(12)로 판정하지 않고 위치로 판정한다.
+                    if (i < months.length - 1) const SizedBox(height: 10),
                   ],
                 ],
               ),
@@ -239,8 +257,10 @@ class _NewYearScreenState extends State<NewYearScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            SizedBox(
-              width: 52,
+            ConstrainedBox(
+              // 고정 너비 52는 큰 글씨에서 '100점'이 잘린다.
+              // 최소 너비만 두고 글씨가 크면 늘어나게 한다.
+              constraints: const BoxConstraints(minWidth: 52),
               child: Text(
                 '${m.avgScore.toStringAsFixed(0)}점',
                 style: const TextStyle(

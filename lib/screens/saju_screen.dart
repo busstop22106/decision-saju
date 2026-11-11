@@ -64,9 +64,16 @@ class _SajuScreenState extends State<SajuScreen> {
 
   Future<void> _pickAdhocBirth() async {
     final now = DateTime.now();
+    // 이미 입력한 날짜가 있으면 그 날짜로 다시 연다. 없으면 30년 전 오늘.
+    // 윤년 2월 29일에 열면 30년 전이 평년이라 3월 1일로 넘어가니 28일로 보정한다.
+    final fallback = DateTime(
+      now.year - 30,
+      now.month,
+      now.day > 28 ? 28 : now.day,
+    );
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime(now.year - 30, now.month, now.day),
+      initialDate: _adhocBirth ?? fallback,
       firstDate: DateTime(1900),
       lastDate: now,
     );
@@ -114,10 +121,12 @@ class _SajuScreenState extends State<SajuScreen> {
                 return ChoiceChip(
                   label: Text('${m.name} · ${m.relation}'),
                   selected: selected,
-                  onSelected: (_) {
+                  onSelected: (isSelected) {
                     setState(() {
-                      _selectedMemberId = selected ? null : m.id;
-                      if (!selected) _adhocBirth = null;
+                      _selectedMemberId = isSelected ? m.id : null;
+                      // 구성원을 고른다고 직접 입력값을 지우지 않는다.
+                      // 화면은 배타 모드(구성원 또는 직접 입력 중 하나만 보임)이지만,
+                      // 칩을 해제하면 직접 입력이 그대로 돌아온다.
                     });
                   },
                 );
@@ -134,27 +143,29 @@ class _SajuScreenState extends State<SajuScreen> {
                   : '직접 입력: ${_adhocBirth!.year}년 ${_adhocBirth!.month}월 ${_adhocBirth!.day}일',
             ),
           ),
-          if (_adhocBirth != null) ...[
+          if (_adhocBirth != null && _selectedMemberId == null) ...[
             const SizedBox(height: 10),
-            Row(
+            // 라벨·칩 2개·드롭다운을 한 Row에 두면 좁은 화면·큰 글씨에서 넘친다.
+            // Wrap으로 바꿔 필요하면 2줄로 넘어가게 한다.
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 const Text('출생 시간', style: TextStyle(fontSize: 14)),
-                const SizedBox(width: 12),
                 ChoiceChip(
                   label: const Text('시간 모름'),
                   selected: _adhocTimeUnknown,
                   onSelected: (_) =>
                       setState(() => _adhocTimeUnknown = true),
                 ),
-                const SizedBox(width: 8),
                 ChoiceChip(
                   label: const Text('시간 입력'),
                   selected: !_adhocTimeUnknown,
                   onSelected: (_) =>
                       setState(() => _adhocTimeUnknown = false),
                 ),
-                if (!_adhocTimeUnknown) ...[
-                  const SizedBox(width: 8),
+                if (!_adhocTimeUnknown)
                   DropdownButton<int>(
                     value: _adhocHour,
                     dropdownColor: AppTheme.card,
@@ -169,7 +180,6 @@ class _SajuScreenState extends State<SajuScreen> {
                       if (h != null) setState(() => _adhocHour = h);
                     },
                   ),
-                ],
               ],
             ),
           ],
@@ -335,10 +345,14 @@ class _SajuScreenState extends State<SajuScreen> {
               ),
             ),
           ],
-          const Spacer(),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              style:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.end,
+            ),
           ),
         ],
       ),

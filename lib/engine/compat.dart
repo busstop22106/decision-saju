@@ -67,14 +67,16 @@ const List<Set<String>> _yukhap = [
   {'오', '미'},
 ];
 
-enum ZodiacRelation { samhap, yukhap, same, chung, normal }
+/// 두 사람의 띠(지지 2개) 비교에서는 삼합 그룹 3개가 다 모일 수 없으므로,
+/// 그룹 2개가 겹치는 경우는 삼합이 아니라 반합(半合)이다.
+enum ZodiacRelation { samhap, banhap, yukhap, same, chung, normal }
 
 /// 두 지지 사이의 띠 관계
 ZodiacRelation zodiacRelation(String a, String b) {
   if (a == b) return ZodiacRelation.same;
   final pair = {a, b};
   for (final g in _samhap) {
-    if (g.contains(a) && g.contains(b)) return ZodiacRelation.samhap;
+    if (g.contains(a) && g.contains(b)) return ZodiacRelation.banhap;
   }
   for (final p in _yukhap) {
     if (p.length == pair.length && p.containsAll(pair)) {
@@ -90,10 +92,13 @@ ZodiacRelation zodiacRelation(String a, String b) {
 }
 
 /// 띠 관계 점수 (20점 만점)
+/// 반합은 15점 — 육합(17점)과 같은 띠(13점) 사이.
 double zodiacScore(String memberBranch, String babyBranch) {
   switch (zodiacRelation(memberBranch, babyBranch)) {
     case ZodiacRelation.samhap:
       return 20;
+    case ZodiacRelation.banhap:
+      return 15;
     case ZodiacRelation.yukhap:
       return 17;
     case ZodiacRelation.same:
@@ -109,6 +114,8 @@ String zodiacLabel(String memberBranch, String babyBranch) {
   switch (zodiacRelation(memberBranch, babyBranch)) {
     case ZodiacRelation.samhap:
       return '삼합(三合)';
+    case ZodiacRelation.banhap:
+      return '반합(半合)';
     case ZodiacRelation.yukhap:
       return '육합(六合)';
     case ZodiacRelation.same:
@@ -166,7 +173,7 @@ class FamilyCompatResult {
   final SajuResult babySaju;
   final List<String> nameElements; // 이름 2자의 오행
   final String balanceNote; // 가족 오행 균형 한 줄
-  final Map<String, int> familyCountsBefore; // 구성원 합산 오행 분포
+  final Map<String, int> familyCountsBefore; // 가족 전체(아기 포함) 합산 오행 분포
   final Map<String, int> familyCountsAfter; // 이름 오행 반영 후
 
   const FamilyCompatResult({
@@ -179,11 +186,14 @@ class FamilyCompatResult {
   });
 
   double get total =>
-      members.map((m) => m.total).reduce((a, b) => a + b) / members.length;
+      members.isEmpty
+          ? 0.0
+          : members.map((m) => m.total).reduce((a, b) => a + b) /
+              members.length;
 
-  /// 가장 잘 맞는 구성원
-  MemberCompat get best =>
-      members.reduce((a, b) => a.total >= b.total ? a : b);
+  /// 가장 잘 맞는 구성원. 구성원이 없으면 null.
+  MemberCompat? get best =>
+      members.isEmpty ? null : members.reduce((a, b) => a.total >= b.total ? a : b);
 
   /// 점수 내림차순 정렬본 (순위 표시용)
   List<MemberCompat> get ranked =>
@@ -224,11 +234,12 @@ double _needOf(Map<String, int> counts, String element) {
 }
 
 /// 이름 오행 하나가 구성원 용신/희신과 맺는 조화도 (0~1)
+/// 희신은 용신을 생해주는 길한 기운이라 상생(0.85)보다 높게 본다.
 double _harmonyOf(String nameElement, SajuResult member) {
   final yong = member.yongsin;
   if (yong == null) return 0.5;
   if (nameElement == yong) return 1.0;
-  if (member.huishin != null && nameElement == member.huishin) return 0.8;
+  if (member.huishin != null && nameElement == member.huishin) return 0.9;
   if (generatesTo(nameElement, yong)) return 0.85; // 이름이 용신을 생함
   if (controlsTo(nameElement, yong)) return 0.1; // 이름이 용신을 극함
   if (generatesTo(yong, nameElement)) return 0.55; // 용신이 이름을 생함
@@ -251,29 +262,52 @@ MemberCompat _memberCompat({
   for (final e in nameElements) {
     elemSum += _needOf(counts, e);
   }
-  final elementScore = (elemSum / nameElements.length).clamp(0.0, 1.0) * 40;
-  final sorted = ['목', '화', '토', '금', '수']
-    ..sort((a, b) => (counts[a] ?? 0).compareTo(counts[b] ?? 0));
-  final lacking = sorted.first;
-  final filledByName = nameElements.contains(lacking);
-  details.add(filledByName
-      ? '$label 사주에 부족한 ${elementNames[lacking]} 기운을 이름이 채워줘요.'
-      : '$label 사주에 부족한 기운은 ${elementNames[lacking]}이에요. 이 이름은 다른 오행으로 보완해요.');
+  // 이름 글자가 없으면 0점이다. 0으로 나누면 NaN이 된다.
+  final elementScore = nameElements.isEmpty
+      ? 0.0
+      : (elemSum / nameElements.length).clamp(0.0, 1.0) * 40;
+  // 가장 적은 오행이 2개 이상이면 전부 부족한 오행이다. 하나만 보면
+  // 이름이 다른 부족한 오행을 채워줘도 "다른 오행으로 보완"이라 틀리게 나온다.
+  final minCount = ['목', '화', '토', '금', '수']
+      .map((e) => counts[e] ?? 0)
+      .reduce((a, b) => a < b ? a : b);
+  final lackingElements = ['목', '화', '토', '금', '수']
+      .where((e) => (counts[e] ?? 0) == minCount)
+      .toSet();
+  final filled = nameElements
+      .where((e) => lackingElements.contains(e))
+      .toSet();
+  details.add(filled.isNotEmpty
+      ? '$label 사주에 부족한 ${filled.map((e) => elementNames[e]).join('·')} 기운을 이름이 채워줘요.'
+      : '$label 사주에 부족한 기운은 ${lackingElements.map((e) => elementNames[e]).join('·')}이에요. 이 이름은 다른 오행으로 보완해요.');
 
   // ── 용신 조화 (40) ──
   var harmSum = 0.0;
   for (final e in nameElements) {
     harmSum += _harmonyOf(e, member);
   }
-  final yongsinScore = (harmSum / nameElements.length).clamp(0.0, 1.0) * 40;
+  final yongsinScore = nameElements.isEmpty
+      ? 0.0
+      : (harmSum / nameElements.length).clamp(0.0, 1.0) * 40;
   final yong = member.yongsin;
   if (yong != null) {
-    if (nameElements.contains(yong)) {
+    final hasYong = nameElements.contains(yong);
+    final hasSaeng = nameElements.any((e) => generatesTo(e, yong));
+    final hasGeuk = nameElements.any((e) => controlsTo(e, yong));
+    // 상생하는 글자와 상극인 글자가 공존하면 둘 다 적는다.
+    // else-if로 묶으면 상생만 나와 점수와 설명이 어긋난다.
+    if (hasYong) {
       details.add('이름에 $label의 용신인 ${elementNames[yong]} 기운이 직접 들어 있어요.');
-    } else if (nameElements.any((e) => generatesTo(e, yong))) {
+      if (hasGeuk) {
+        details.add('다만 이름의 다른 기운 중 일부가 용신과 상극이라 조화 점수가 깎여요.');
+      }
+    } else if (hasSaeng && hasGeuk) {
+      details.add(
+          '이름의 기운 중 일부가 $label의 용신(${elementNames[yong]})을 생(生)해주지만, 다른 일부는 상극이라 조화 점수가 깎여요.');
+    } else if (hasSaeng) {
       details.add(
           '이름의 기운이 $label의 용신(${elementNames[yong]})을 생(生)해줘서 힘을 보태요.');
-    } else if (nameElements.any((e) => controlsTo(e, yong))) {
+    } else if (hasGeuk) {
       details.add('이름의 기운 중 일부가 $label의 용신(${elementNames[yong]})과 상극이라 조화 점수가 낮아요.');
     } else {
       details.add('$label의 용신은 ${elementNames[yong]}이에요. 이름과는 무난한 관계예요.');
@@ -296,7 +330,7 @@ MemberCompat _memberCompat({
   );
 }
 
-/// 가족 오행 균형 한 줄 설명 (구성원 합산 분포에 이름 오행 반영 전/후 비교)
+/// 가족 오행 균형 한 줄 설명 (가족 전체 분포에 이름 오행 반영 전/후 비교)
 String _balanceNote(Map<String, int> before, Map<String, int> after,
     List<String> nameElements) {
   double spread(Map<String, int> m) {
@@ -342,6 +376,10 @@ FamilyCompatResult computeFamilyCompat({
       .toList();
 
   final before = {'목': 0, '화': 0, '토': 0, '금': 0, '수': 0};
+  // 가족 전체 분포에는 새로 태어난 아기 자신의 사주 8자도 들어간다.
+  // 구성원만 합산하면 아기 오행이 통째로 빠진다.
+  babySaju.elementCounts
+      .forEach((k, v) => before[k] = (before[k] ?? 0) + v);
   for (final m in members) {
     m.saju.elementCounts
         .forEach((k, v) => before[k] = (before[k] ?? 0) + v);

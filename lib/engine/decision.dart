@@ -224,7 +224,7 @@ String _cautionReason(SajuResult saju, DateTime date) {
     return '나를 극하는 ${elementNames[stemEl]} 기운이 강한 날이에요. 큰 결정은 피하세요.';
   }
   if (controlsTo(branchEl, me)) {
-    return '나를 극하는 ${elementNames[branchEl]} 기운이 받쳐요. 무리한 약속은 잡지 않는 게 좋아요.';
+    return '나를 극하는 ${elementNames[branchEl]} 기운이 부딪쳐요. 무리한 약속은 잡지 않는 게 좋아요.';
   }
   return '결정 지수가 낮은 날이에요. 큰 결정보다 작은 일부터 정리하세요.';
 }
@@ -343,7 +343,7 @@ String avoidLine(SajuResult saju, DateTime now) {
     return '오늘은 ${elementNames[stemEl]} 기운이 강해요. 중요한 결정을 서두르지 않는 게 좋아요.';
   }
   if (controlsTo(branchEl, me)) {
-    return '오늘은 ${elementNames[branchEl]} 기운이 받쳐요. 무리한 약속은 잡지 않는 게 좋아요.';
+    return '오늘은 ${elementNames[branchEl]} 기운이 부딪쳐요. 무리한 약속은 잡지 않는 게 좋아요.';
   }
   final score = scoreDay(saju, now);
   if (score < 50) {
@@ -355,8 +355,9 @@ String avoidLine(SajuResult saju, DateTime now) {
 // ── 간이 대운 (10년 운) ──────────────────────────────────────────────
 // 절기 간이표 기준. 전문 감정이 아니라 "지금 흐르는 10년 기운"의 참고값이다.
 // - 순행/역행: 남성+양간 또는 여성+음간 → 순행, 그 외 역행.
-// - 시작 나이: 출생일부터 다음 절기까지의 일수 ÷ 3 (1~10세로 반올림).
-// - 대운 간지: 월주에서 10년마다 한 칸씩 이동한다.
+// - 시작 나이(대운수): 순행은 출생일부터 다음 절기까지, 역행은 이전 절기까지의
+//   일수 ÷ 3 (1~10세로 반올림). 전통 기준 세는나이로 판정한다.
+// - 대운 간지: 월주에서 1칸 이동한 간지가 첫 대운, 이후 10년마다 한 칸씩 이동한다.
 
 const List<(int, int)> _termDates = [
   (1, 6),
@@ -375,46 +376,78 @@ const List<(int, int)> _termDates = [
 
 bool _isYangStem(String stem) => _stems.indexOf(stem) % 2 == 0;
 
-/// 대운 시작 나이 (1~10). 출생일부터 다음 절기까지의 일수 ÷ 3.
-int daewoonStartAge(DateTime birth) {
+/// 대운 시작 나이 (1~10). 순행은 출생일부터 다음 절기까지, 역행은
+/// 이전 절기까지의 일수 ÷ 3. [forward]가 false면 역행 기준이다.
+int daewoonStartAge(DateTime birth, {bool forward = true}) {
   final b = DateTime(birth.year, birth.month, birth.day);
-  DateTime? nextTerm;
-  for (final (m, d) in _termDates) {
+  DateTime term;
+  if (forward) {
+    DateTime? nextTerm;
+    for (final (m, d) in _termDates) {
+      final t = DateTime(b.year, m, d);
+      if (t.isAfter(b)) {
+        nextTerm = t;
+        break;
+      }
+    }
+    term = nextTerm ??
+        DateTime(b.year + 1, _termDates.first.$1, _termDates.first.$2);
+    final days = term.difference(b).inDays;
+    return (days / 3).round().clamp(1, 10);
+  }
+  DateTime? prevTerm;
+  for (final (m, d) in _termDates.reversed) {
     final t = DateTime(b.year, m, d);
-    if (t.isAfter(b)) {
-      nextTerm = t;
+    if (t.isBefore(b)) {
+      prevTerm = t;
       break;
     }
   }
-  nextTerm ??= DateTime(b.year + 1, _termDates.first.$1, _termDates.first.$2);
-  final days = nextTerm.difference(b).inDays;
+  term = prevTerm ??
+      DateTime(b.year - 1, _termDates.last.$1, _termDates.last.$2);
+  final days = b.difference(term).inDays;
   return (days / 3).round().clamp(1, 10);
 }
 
 /// 현재 대운 간지. 대운 시작 전이면 null.
+///
+/// 나이는 세는나이(태어난 해를 1세로 셈)로 판정한다. 첫 대운은 월주에서
+/// 순행/역행 방향으로 1칸 이동한 간지다 (월주 자체가 대운이 아니다).
 SajuPillar? currentDaewoon(BabyInfo baby, SajuResult saju, DateTime now) {
   final birth = DateTime(baby.birth.year, baby.birth.month, baby.birth.day);
-  var age = now.year - birth.year;
-  if (now.month < birth.month ||
-      (now.month == birth.month && now.day < birth.day)) {
-    age -= 1;
-  }
-  final startAge = daewoonStartAge(birth);
+  final age = now.year - birth.year + 1; // 세는나이
+  final forward =
+      (baby.gender == Gender.boy && _isYangStem(saju.year.stem)) ||
+      (baby.gender == Gender.girl && !_isYangStem(saju.year.stem));
+  final startAge = daewoonStartAge(birth, forward: forward);
   // Dart의 ~/는 0 쪽으로 버림이라 (age - startAge)가 음수여도 0이 될 수 있다.
   // 대운 시작 전인지는 나이로 직접 판정한다.
   if (age < startAge) return null;
   final steps = (age - startAge) ~/ 10;
+  // 첫 대운은 월주에서 이미 1칸 이동한 간지다.
+  final stepCount = steps + 1;
 
-  final forward =
-      (baby.gender == Gender.boy && _isYangStem(saju.year.stem)) ||
-      (baby.gender == Gender.girl && !_isYangStem(saju.year.stem));
   final dir = forward ? 1 : -1;
-  final stemIdx = (_stems.indexOf(saju.month.stem) + dir * steps) % 10;
-  final branchIdx = (_branches.indexOf(saju.month.branch) + dir * steps) % 12;
+  final stemIdx = (_stems.indexOf(saju.month.stem) + dir * stepCount) % 10;
+  final branchIdx =
+      (_branches.indexOf(saju.month.branch) + dir * stepCount) % 12;
   return SajuPillar(
     _stems[(stemIdx + 10) % 10],
     _branches[(branchIdx + 12) % 12],
   );
+}
+
+/// 단어 마지막 글자의 받침 유무에 따라 주격 조사 '이'/'가'를 고른다.
+/// (오행 이름: 목·금만 받침 있음 → '이', 화·토·수는 받침 없음 → '가')
+/// 이름이 '화(火)'처럼 한자를 달고 있어도 마지막 한글 음절로 판정한다.
+String _particleGa(String word) {
+  for (var i = word.length - 1; i >= 0; i--) {
+    final c = word.codeUnitAt(i);
+    if (c >= 0xAC00 && c <= 0xD7A3) {
+      return (c - 0xAC00) % 28 == 0 ? '가' : '이';
+    }
+  }
+  return '가';
 }
 
 /// 근거 3줄 — 용신·일진·대운. "같은 계산에서 나온 결과입니다"의 근거다.
@@ -423,8 +456,9 @@ List<String> evidenceLines(BabyInfo baby, SajuResult saju, DateTime now) {
 
   // 1. 용신
   if (saju.yongsin != null) {
+    final yongName = elementNames[saju.yongsin]!;
     lines.add(
-      '용신은 ${elementNames[saju.yongsin]} 기운이에요. ${elementNames[saju.yongsin]}이 강한 날에 결정하면 흐름을 탈 수 있어요.',
+      '용신은 $yongName 기운이에요. $yongName${_particleGa(yongName)} 강한 날에 결정하면 흐름을 탈 수 있어요.',
     );
   } else {
     final lacking = lackingElements(saju.elementCounts);

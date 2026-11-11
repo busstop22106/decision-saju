@@ -44,7 +44,16 @@ class FamilyScreen extends StatelessWidget {
       ),
     );
     if (ok == true) {
-      await onRemove(m.id);
+      try {
+        await onRemove(m.id);
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('삭제에 실패했어요. 다시 시도해 주세요.')),
+          );
+        }
+        return;
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${m.name}님을 삭제했어요.')),
@@ -158,7 +167,7 @@ class FamilyScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${saju.dayMaster}일생 · 용신 ${saju.yongsin == null ? '—' : elementNames[saju.yongsin] ?? saju.yongsin!}',
+                      '${saju.dayMaster}일생 · 용신 ${saju.yongsin == null ? '—' : elementNames[saju.yongsin] ?? '—'}',
                       style: theme.textTheme.bodyMedium,
                     ),
                   ],
@@ -188,13 +197,18 @@ class FamilyScreen extends StatelessWidget {
         ),
       );
     }
+    // 년지(띠)는 출생 정보에만 종속된다. 쌍마다 사주를 다시 계산하지 않고
+    // 1회만 계산해 둔다.
+    final branches = [
+      for (final m in members) sajuOfBirth(m.birth, m.birthHour).year.branch,
+    ];
     final rows = <Widget>[];
     for (var i = 0; i < members.length; i++) {
       for (var j = i + 1; j < members.length; j++) {
         final a = members[i];
         final b = members[j];
-        final aBranch = sajuOfBirth(a.birth, a.birthHour).year.branch;
-        final bBranch = sajuOfBirth(b.birth, b.birthHour).year.branch;
+        final aBranch = branches[i];
+        final bBranch = branches[j];
         final label = zodiacLabel(aBranch, bBranch);
         final aZodiac = zodiacNames[aBranch] ?? '';
         final bZodiac = zodiacNames[bBranch] ?? '';
@@ -205,11 +219,15 @@ class FamilyScreen extends StatelessWidget {
                 ? 0
                 : 12),
             child: Row(
+              // 이름이 2줄로 늘어나면 라벨이 가운데 뜨지 않게 첫 줄 기준 정렬.
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Text(
                     '${a.name}($aZodiac) × ${b.name}($bZodiac)',
                     style: theme.textTheme.bodyMedium,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Text(

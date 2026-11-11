@@ -22,6 +22,7 @@ class _DecisionLogScreenState extends State<DecisionLogScreen> {
   DecisionStore? _store;
   List<DecisionRecord> _records = [];
   bool _loading = true;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -30,44 +31,56 @@ class _DecisionLogScreenState extends State<DecisionLogScreen> {
   }
 
   Future<void> _load() async {
-    final store = await DecisionStore.load();
-    if (!mounted) return;
-    setState(() {
-      _store = store;
-      _records = store.loadAll();
-      _loading = false;
-    });
+    try {
+      final store = await DecisionStore.load();
+      if (!mounted) return;
+      setState(() {
+        _store = store;
+        _records = store.loadAll();
+      });
+    } catch (_) {
+      // 로드 실패 시 빈 목록으로 보여준다. (스토어 내부에서도
+      // 파싱 실패를 걸러내지만, 여기서도 로딩이 영원히 안 끝나지 않게 한다.)
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _answer(String id, String answer) async {
-    await _store?.answerFollowUp(id, answer);
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
     try {
-      await followUpNotifications.cancelFollowUp(id);
-    } catch (_) {
-      // 알림 취소 실패가 답 저장을 막으면 안 된다.
-    }
-    await _load();
-    if (!mounted) return;
-    // 잘 된 결정이면 한 번만 스토어 별점을 부탁한다.
-    // 평생 패스 모델에서는 되물음 루프의 목적이 재구매가 아니라 리뷰·공유다.
-    final showReview = await ReviewPrompt.shouldShow(answer);
-    if (!mounted) return;
-    if (showReview) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('결정이 잘 됐다니 다행이에요. 스토어 별점이 큰 힘이 돼요.'),
-          action: SnackBarAction(
-            label: '별점 남기기',
-            onPressed: () => reviewPrompt.prompt(),
+      await _store?.answerFollowUp(id, answer);
+      try {
+        await followUpNotifications.cancelFollowUp(id);
+      } catch (_) {
+        // 알림 취소 실패가 답 저장을 막으면 안 된다.
+      }
+      await _load();
+      if (!mounted) return;
+      // 잘 된 결정이면 한 번만 스토어 별점을 부탁한다.
+      // 평생 패스 모델에서는 되물음 루프의 목적이 재구매가 아니라 리뷰·공유다.
+      final showReview = await ReviewPrompt.shouldShow(answer);
+      if (!mounted) return;
+      if (showReview) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('결정이 잘 됐다니 다행이에요. 스토어 별점이 큰 힘이 돼요.'),
+            action: SnackBarAction(
+              label: '별점 남기기',
+              onPressed: () => reviewPrompt.prompt(),
+            ),
+            duration: const Duration(seconds: 6),
           ),
-          duration: const Duration(seconds: 6),
-        ),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('기록했어요. 다음 결정에도 참고할게요.')),
       );
-      return;
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('기록했어요. 다음 결정에도 참고할게요.')),
-    );
   }
 
   Future<void> _remove(String id) async {
@@ -89,16 +102,33 @@ class _DecisionLogScreenState extends State<DecisionLogScreen> {
       ),
     );
     if (confirmed != true) return;
-    await _store?.remove(id);
+    try {
+      await _store?.remove(id);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('삭제에 실패했어요. 다시 시도해 주세요.')),
+      );
+      return;
+    }
     try {
       await followUpNotifications.cancelFollowUp(id);
     } catch (_) {
       // 알림 취소 실패가 삭제를 막으면 안 된다.
     }
+    if (!mounted) return;
     await _load();
   }
 
   String _dateLabel(DateTime d) => '${d.year}년 ${d.month}월 ${d.day}일';
+
+  /// 선택한 안 표시 문구. '비슷함'·'A'·'B' 외의 값은 '선택 없음'으로 보인다.
+  String _chosenText(DecisionRecord r) {
+    if (r.chosen == '비슷함') return '비슷함';
+    if (r.chosen == 'A') return 'A안: ${r.optionA}';
+    if (r.chosen == 'B') return 'B안: ${r.optionB}';
+    return '선택 없음';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -189,8 +219,19 @@ class _DecisionLogScreenState extends State<DecisionLogScreen> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: AppTheme.muted,
+                    size: 20,
+                  ),
+                  onPressed: () => _remove(r.id),
+                  tooltip: '삭제',
+                ),
               ],
             ),
+            const SizedBox(height: 6),
+            Text('선택: ${_chosenText(r)}', style: theme.textTheme.bodyMedium),
             const SizedBox(height: 6),
             Text(r.summary, style: theme.textTheme.bodyMedium),
             const SizedBox(height: 12),
@@ -199,7 +240,8 @@ class _DecisionLogScreenState extends State<DecisionLogScreen> {
               children: [
                 for (final answer in ['잘 됐어요', '아직 몰라요', '안 됐어요'])
                   OutlinedButton(
-                    onPressed: () => _answer(r.id, answer),
+                    onPressed:
+                        _isSubmitting ? null : () => _answer(r.id, answer),
                     child: Text(answer),
                   ),
               ],
@@ -211,11 +253,7 @@ class _DecisionLogScreenState extends State<DecisionLogScreen> {
   }
 
   Widget _recordCard(DecisionRecord r, ThemeData theme) {
-    final chosenText = r.chosen == '비슷함'
-        ? '비슷함'
-        : r.chosen == 'A'
-            ? 'A안: ${r.optionA}'
-            : 'B안: ${r.optionB}';
+    final chosenText = _chosenText(r);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -256,12 +294,15 @@ class _DecisionLogScreenState extends State<DecisionLogScreen> {
                 ),
                 if (r.followUp != null) ...[
                   const SizedBox(width: 12),
-                  Text(
-                    '결과: ${r.followUp}',
-                    style: const TextStyle(
-                      color: AppTheme.vermilionSoft,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      '결과: ${r.followUp}',
+                      style: const TextStyle(
+                        color: AppTheme.vermilionSoft,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],

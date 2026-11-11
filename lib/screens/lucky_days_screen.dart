@@ -24,11 +24,24 @@ class LuckyDaysScreen extends StatefulWidget {
 class _LuckyDaysScreenState extends State<LuckyDaysScreen> {
   String _purpose = '전체';
   late DateTime _selected;
+  // 30일치 점수는 목적 필터·선택 날짜와 무관하다. build마다 다시 계산하지
+  // 않고 진입 시 1회만 계산해 둔다.
+  late DateTime _today;
+  late SajuResult _saju;
+  late List<LuckyDay> _days;
+  late List<LuckyDay> _top3;
+  late List<LuckyDay> _worst2;
 
   @override
   void initState() {
     super.initState();
-    _selected = DateTime.now();
+    final now = DateTime.now();
+    _selected = now;
+    _today = DateTime(now.year, now.month, now.day);
+    _saju = sajuOfBirth(widget.member.birth, widget.member.birthHour);
+    _days = dayScores(_saju, _today);
+    _top3 = luckyDays(_saju, _today);
+    _worst2 = worstDays(_saju, _today);
   }
 
   String _dateLabel(DateTime d) => '${d.year}년 ${d.month}월 ${d.day}일';
@@ -43,12 +56,10 @@ class _LuckyDaysScreenState extends State<LuckyDaysScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final saju = sajuOfBirth(widget.member.birth, widget.member.birthHour);
-    final days = dayScores(saju, today);
-    final top3 = luckyDays(saju, today);
-    final worst2 = worstDays(saju, today);
+    final today = _today;
+    final days = _days;
+    final top3 = _top3;
+    final worst2 = _worst2;
     final topDates = top3.map((d) => d.date).toSet();
     final selectedDay =
         days.firstWhere((d) => d.date == DateTime(
@@ -132,41 +143,55 @@ class _LuckyDaysScreenState extends State<LuckyDaysScreen> {
               return InkWell(
                 onTap: () => setState(() => _selected = day.date),
                 borderRadius: BorderRadius.circular(10),
-                child: Container(
+                // InkWell 안에 불투명 Container를 두면 리플이 배경 뒤에 가려진다.
+                // Ink에 decoration을 두면 리플이 그 위에 보인다.
+                child: Ink(
                   decoration: BoxDecoration(
                     color: isTop ? AppTheme.vermilion : AppTheme.card,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: isSelected
-                          ? AppTheme.vermilion
+                          // 길일(주홍 배경)을 고르면 주홍 테두리가 배경에 묻힌다.
+                          // 흰색 테두리로 선택 표시가 보이게 한다.
+                          ? (isTop ? Colors.white : AppTheme.vermilion)
                           : isToday
                               ? AppTheme.indigo
                               : AppTheme.border,
                       width: isSelected || isToday ? 1.5 : 1,
                     ),
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '${day.date.day}',
-                        style: TextStyle(
-                          color: isTop ? Colors.white : AppTheme.ink,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      // 큰 글씨에서도 타일을 넘지 않게 축소한다.
+                      // mainAxisSize.min이어야 내용 높이가 그대로 측량돼
+                      // FittedBox가 넘칠 때만 줄인다.
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          // 30일 창은 월을 넘는다. 매월 1일에는 월을 함께 적는다.
+                          day.date.day == 1
+                              ? '${day.date.month}/1'
+                              : '${day.date.day}',
+                          style: TextStyle(
+                            color: isTop ? Colors.white : AppTheme.ink,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                      Text(
-                        '${day.score}점',
-                        style: TextStyle(
-                          color: isTop
-                              ? Colors.white
-                              : AppTheme.vermilionSoft,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                        Text(
+                          '${day.score}점',
+                          style: TextStyle(
+                            color: isTop
+                                ? Colors.white
+                                : AppTheme.vermilionSoft,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );

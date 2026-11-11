@@ -14,7 +14,7 @@ class PoliciesScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          for (final (title, body) in policies) ...[
+          for (var i = 0; i < policies.length; i++) ...[
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(18),
@@ -22,7 +22,7 @@ class PoliciesScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      policies[i].$1,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -30,14 +30,16 @@ class PoliciesScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      body,
+                      policies[i].$2,
                       style: const TextStyle(fontSize: 14, height: 1.7),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            // 마지막 항목 뒤에는 간격을 두지 않는다.
+            // 두면 하단 패딩 24와 합쳐져 36이 된다.
+            if (i < policies.length - 1) const SizedBox(height: 12),
           ],
         ],
       ),

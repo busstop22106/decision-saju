@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:decision_saju/data/glossary.dart';
 import 'package:decision_saju/data/policies.dart';
 import 'package:decision_saju/engine/compat.dart';
+import 'package:decision_saju/screens/lucky_days_screen.dart';
+import 'package:decision_saju/screens/new_year_screen.dart';
 import 'package:decision_saju/screens/policies_screen.dart';
 import 'package:decision_saju/services/payment_service.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
@@ -331,6 +333,185 @@ void main() {
     });
   });
 
+  group('가족 궁합 (2차 리뷰 반영)', () {
+    HanjaPick pick(String element) => HanjaPick(
+          syllable: '가',
+          char: '家',
+          strokes: 10,
+          element: element,
+          meaning: '집',
+        );
+
+    SajuResult sajuOf(DateTime birth, Gender gender) {
+      return computeSaju(BabyInfo(
+        surname: '',
+        surnameHanja: '',
+        surnameStrokes: 0,
+        gender: gender,
+        birth: birth,
+        birthHour: 10,
+      ));
+    }
+
+    SajuResult findMember(bool Function(SajuResult s) matches) {
+      final start = DateTime(2024, 1, 1);
+      for (var i = 0; i < 366; i++) {
+        final s = sajuOf(
+          DateTime(start.year, start.month, start.day + i),
+          Gender.boy,
+        );
+        if (matches(s)) return s;
+      }
+      throw StateError('조건에 맞는 사주를 찾지 못했다');
+    }
+
+    test('띠 2개 결합은 반합 15점이다', () {
+      // 신·자·진 삼합 그룹에서 2개만 겹치면 반합이다.
+      expect(zodiacRelation('신', '자'), ZodiacRelation.banhap);
+      expect(zodiacScore('신', '자'), 15);
+      expect(zodiacLabel('신', '자'), '반합(半合)');
+      // 육합·같은 띠·충은 그대로다.
+      expect(zodiacRelation('자', '축'), ZodiacRelation.yukhap);
+      expect(zodiacScore('자', '축'), 17);
+      expect(zodiacRelation('자', '자'), ZodiacRelation.same);
+      expect(zodiacScore('자', '자'), 13);
+      expect(zodiacRelation('자', '오'), ZodiacRelation.chung);
+      expect(zodiacScore('자', '오'), 4);
+    });
+
+    test('이름 글자가 없어도 점수가 NaN이 되지 않는다', () {
+      final member = sajuOf(DateTime(1990, 3, 15), Gender.girl);
+      final baby = sajuOf(DateTime(2024, 3, 1), Gender.boy);
+      final result = computeFamilyCompat(
+        members: [(label: '엄마', saju: member)],
+        babySaju: baby,
+        picks: [],
+      );
+      final m = result.members.first;
+      expect(m.elementScore, 0.0);
+      expect(m.yongsinScore, 0.0);
+      expect(m.total.isNaN, false);
+      expect(result.total.isNaN, false);
+    });
+
+    test('구성원이 없으면 합계 0점, 최고 궁합은 없다', () {
+      final baby = sajuOf(DateTime(2024, 3, 1), Gender.boy);
+      final result = FamilyCompatResult(
+        members: const [],
+        babySaju: baby,
+        nameElements: const [],
+        balanceNote: '',
+        familyCountsBefore: const {
+          '목': 0,
+          '화': 0,
+          '토': 0,
+          '금': 0,
+          '수': 0,
+        },
+        familyCountsAfter: const {
+          '목': 0,
+          '화': 0,
+          '토': 0,
+          '금': 0,
+          '수': 0,
+        },
+      );
+      expect(result.total, 0.0);
+      expect(result.best, isNull);
+      expect(result.ranked, isEmpty);
+    });
+
+    test('가족 오행 분포에 아기 사주도 들어간다', () {
+      final member = sajuOf(DateTime(1990, 3, 15), Gender.girl);
+      final baby = sajuOf(DateTime(2024, 3, 1), Gender.boy);
+      final result = computeFamilyCompat(
+        members: [(label: '엄마', saju: member)],
+        babySaju: baby,
+        picks: [pick('목')],
+      );
+      for (final e in ['목', '화', '토', '금', '수']) {
+        expect(
+          result.familyCountsBefore[e],
+          (member.elementCounts[e] ?? 0) + (baby.elementCounts[e] ?? 0),
+        );
+      }
+    });
+
+    test('희신 일치 점수가 상생보다 높다', () {
+      final member = findMember(
+        (s) => s.huishin != null && s.yongsin != null,
+      );
+      final baby = sajuOf(DateTime(2024, 3, 1), Gender.boy);
+      final yong = member.yongsin!;
+      // 용신을 생해주는 오행 (목→화→토→금→수→목 순환에서 앞 오행).
+      const cycle = ['목', '화', '토', '금', '수'];
+      final saeng = cycle.firstWhere((e) => generatesTo(e, yong));
+      double scoreWith(String element) {
+        final r = computeFamilyCompat(
+          members: [(label: '아빠', saju: member)],
+          babySaju: baby,
+          picks: [pick(element)],
+        );
+        return r.members.first.yongsinScore;
+      }
+
+      expect(scoreWith(member.huishin!), greaterThan(scoreWith(saeng)));
+    });
+
+    test('부족한 오행이 2개여도 채운 오행을 알아본다', () {
+      final member = findMember((s) {
+        final zeros = ['목', '화', '토', '금', '수']
+            .where((e) => (s.elementCounts[e] ?? 0) == 0)
+            .length;
+        return zeros >= 2;
+      });
+      final baby = sajuOf(DateTime(2024, 3, 1), Gender.boy);
+      final lacking = ['목', '화', '토', '금', '수']
+          .where((e) => (member.elementCounts[e] ?? 0) == 0)
+          .toList();
+      final other = ['목', '화', '토', '금', '수']
+          .firstWhere((e) => !lacking.contains(e));
+
+      final filled = computeFamilyCompat(
+        members: [(label: '아빠', saju: member)],
+        babySaju: baby,
+        picks: [pick(lacking.first)],
+      );
+      expect(
+        filled.members.first.details.any((d) => d.contains('채워줘요')),
+        true,
+      );
+
+      final notFilled = computeFamilyCompat(
+        members: [(label: '아빠', saju: member)],
+        babySaju: baby,
+        picks: [pick(other)],
+      );
+      expect(
+        notFilled.members.first.details
+            .any((d) => d.contains('다른 오행으로 보완해요')),
+        true,
+      );
+    });
+
+    test('상생과 상극이 공존하면 둘 다 적는다', () {
+      final member = findMember((s) => s.yongsin != null);
+      final baby = sajuOf(DateTime(2024, 3, 1), Gender.boy);
+      final yong = member.yongsin!;
+      const cycle = ['목', '화', '토', '금', '수'];
+      final saeng = cycle.firstWhere((e) => generatesTo(e, yong));
+      final geuk = cycle.firstWhere((e) => controlsTo(e, yong));
+      final result = computeFamilyCompat(
+        members: [(label: '아빠', saju: member)],
+        babySaju: baby,
+        picks: [pick(saeng), pick(geuk)],
+      );
+      final details = result.members.first.details.join('\n');
+      expect(details, contains('생(生)'));
+      expect(details, contains('상극'));
+    });
+  });
+
   group('yearMonthScores', () {
     final baby = BabyInfo(
       surname: '',
@@ -410,6 +591,71 @@ void main() {
       expect(daewoonStartAge(DateTime(1990, 3, 15)), inInclusiveRange(1, 10));
     });
 
+    test('순행과 역행의 시작 나이가 다르다', () {
+      // 1987-05-20: 순행은 다음 절기(6월 6일, 17일 뒤) → 6세,
+      // 역행은 이전 절기(5월 6일, 14일 전) → 5세.
+      expect(daewoonStartAge(DateTime(1987, 5, 20), forward: true), 6);
+      expect(daewoonStartAge(DateTime(1987, 5, 20), forward: false), 5);
+    });
+
+    test('첫 대운은 월주에서 1칸 이동한 간지다', () {
+      const stems = ['갑', '을', '병', '정', '무', '기', '경', '신', '임', '계'];
+      const branches = [
+        '자',
+        '축',
+        '인',
+        '묘',
+        '진',
+        '사',
+        '오',
+        '미',
+        '신',
+        '유',
+        '술',
+        '해',
+      ];
+      final baby = BabyInfo(
+        surname: '',
+        surnameHanja: '',
+        surnameStrokes: 0,
+        gender: Gender.boy,
+        birth: DateTime(1987, 5, 20),
+        birthHour: 10,
+      );
+      final saju = computeSaju(baby);
+      // 1987년 정묘 — 정은 음간이라 남성은 역행, 시작 나이 5세(세는나이).
+      expect(daewoonStartAge(baby.birth, forward: false), 5);
+      // 세는나이 5세가 되는 해(1991년)에 첫 대운이 시작된다.
+      final first = currentDaewoon(baby, saju, DateTime(1991, 5, 20));
+      expect(first, isNotNull);
+      // 월주와 같으면 안 된다 (수정 전: 첫 10년은 월주가 그대로 나왔다).
+      // 역행이므로 월주에서 1칸 뒤로 이동한 간지다.
+      final stemIdx = stems.indexOf(saju.month.stem);
+      final branchIdx = branches.indexOf(saju.month.branch);
+      expect(first!.stem, stems[(stemIdx - 1 + 10) % 10]);
+      expect(first.branch, branches[(branchIdx - 1 + 12) % 12]);
+    });
+
+    test('세는나이 기준으로 대운에 들어간다', () {
+      final baby = BabyInfo(
+        surname: '',
+        surnameHanja: '',
+        surnameStrokes: 0,
+        gender: Gender.boy,
+        birth: DateTime(2019, 11, 1),
+        birthHour: 10,
+      );
+      final saju = computeSaju(baby);
+      // 2019년 기해 — 기는 음간이라 남성은 역행.
+      // 이전 절기(10월 8일)까지 24일 → 시작 나이 8세.
+      expect(daewoonStartAge(baby.birth, forward: false), 8);
+      // 2026년 11월 10일: 만 나이 7세지만 세는나이 8세라 대운이 시작된다.
+      expect(
+        currentDaewoon(baby, saju, DateTime(2026, 11, 10)),
+        isNotNull,
+      );
+    });
+
     test('성인은 현재 대운이 있고, 신생아는 대운 전이다', () {
       final adult = BabyInfo(
         surname: '',
@@ -457,6 +703,39 @@ void main() {
       expect(lines[0], contains('용신'));
       expect(lines[1], contains('일진'));
       expect(lines[2], contains('대운'));
+    });
+
+    test('용신 문구의 조사가 받침에 맞는다', () {
+      // 받침 없는 용신(화·토·수)은 '가', 받침 있는 용신(목·금)은 '이'.
+      BabyInfo? findBabyWithYongsin(String element) {
+        final start = DateTime(2024, 1, 1);
+        for (var i = 0; i < 366; i++) {
+          final b = BabyInfo(
+            surname: '',
+            surnameHanja: '',
+            surnameStrokes: 0,
+            gender: Gender.boy,
+            birth: DateTime(start.year, start.month, start.day + i),
+            birthHour: 10,
+          );
+          if (computeSaju(b).yongsin == element) return b;
+        }
+        return null;
+      }
+
+      final fireBaby = findBabyWithYongsin('화');
+      expect(fireBaby, isNotNull);
+      expect(
+        evidenceLines(fireBaby!, computeSaju(fireBaby), now)[0],
+        contains('화(火)가 강한 날'),
+      );
+
+      final woodBaby = findBabyWithYongsin('목');
+      expect(woodBaby, isNotNull);
+      expect(
+        evidenceLines(woodBaby!, computeSaju(woodBaby), now)[0],
+        contains('목(木)이 강한 날'),
+      );
     });
 
     test('오늘 피할 것은 비어 있지 않다', () {
@@ -574,6 +853,94 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('아직 저장된 결정이 없어요.'), findsOneWidget);
+    });
+
+    testWidgets('되물음 카드에 선택한 안과 삭제 버튼이 보인다', (tester) async {
+      final now = DateTime.now();
+      SharedPreferences.setMockInitialValues({
+        'decision_records_v1': jsonEncode([
+          record(
+            id: 'due1',
+            decidedAt: now.subtract(const Duration(days: 31)),
+          ).toJson(),
+        ]),
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(home: DecisionLogScreen()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('선택: A안: 지금 회사에 남기'), findsOneWidget);
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+      expect(find.text('잘 됐어요'), findsOneWidget);
+    });
+  });
+
+  group('LuckyDaysScreen', () {
+    testWidgets('30일 달력이 뜨고 월이 바뀌는 날에 월이 보인다', (tester) async {
+      final member = FamilyMember(
+        id: 'm1',
+        name: '아빠',
+        relation: '아빠',
+        gender: Gender.boy,
+        birth: DateTime(1987, 5, 20),
+        birthHour: 10,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: LuckyDaysScreen(member: member)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('앞으로 30일'), findsOneWidget);
+      // 30일 창 안에 1일이 있으면 '월/1' 형태로 보인다.
+      final now = DateTime.now();
+      DateTime? firstOfMonth;
+      for (var i = 0; i < 30; i++) {
+        final d = DateTime(now.year, now.month, now.day + i);
+        if (d.day == 1) {
+          firstOfMonth = d;
+          break;
+        }
+      }
+      if (firstOfMonth != null) {
+        expect(
+          find.text('${firstOfMonth.month}/1'),
+          findsOneWidget,
+        );
+      }
+    });
+  });
+
+  group('NewYearScreen', () {
+    testWidgets('신년 운세가 뜨고 연도 칩이 고정돼 있다', (tester) async {
+      final member = FamilyMember(
+        id: 'm1',
+        name: '아빠',
+        relation: '아빠',
+        gender: Gender.boy,
+        birth: DateTime(1987, 5, 20),
+        birthHour: 10,
+      );
+      final now = DateTime.now();
+      final year = now.month >= 11 ? now.year + 1 : now.year;
+
+      await tester.pumpWidget(
+        MaterialApp(home: NewYearScreen(member: member)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('$year년 신년 결정 운세'), findsOneWidget);
+      expect(find.text('${year - 1}년'), findsOneWidget);
+      expect(find.text('$year년'), findsOneWidget);
+      expect(find.text('${year + 1}년'), findsOneWidget);
+      // 아래쪽 섹션은 스크롤해야 보인다.
+      await tester.scrollUntilVisible(
+        find.text('월별 결정 지수'),
+        200,
+      );
+      expect(find.text('월별 결정 지수'), findsOneWidget);
     });
   });
 
