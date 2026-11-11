@@ -379,32 +379,36 @@ bool _isYangStem(String stem) => _stems.indexOf(stem) % 2 == 0;
 /// 대운 시작 나이 (1~10). 순행은 출생일부터 다음 절기까지, 역행은
 /// 이전 절기까지의 일수 ÷ 3. [forward]가 false면 역행 기준이다.
 int daewoonStartAge(DateTime birth, {bool forward = true}) {
-  final b = DateTime(birth.year, birth.month, birth.day);
+  // 날짜 차이만 필요하므로 UTC로 계산한다. 로컬 시간대로 계산하면
+  // 일광절약시간(DST)이 있던 해에는 difference().inDays가 하루 적게 나온다.
+  // (예: 한국은 1987년 5월 10일에 DST를 시행했고, 1987-05-06→05-20은
+  // 13일 23시간이라 inDays가 13이 돼 역행 대운수가 5세가 아니라 4세가 됐다.)
+  final b = DateTime.utc(birth.year, birth.month, birth.day);
   DateTime term;
   if (forward) {
     DateTime? nextTerm;
     for (final (m, d) in _termDates) {
-      final t = DateTime(b.year, m, d);
+      final t = DateTime.utc(b.year, m, d);
       if (t.isAfter(b)) {
         nextTerm = t;
         break;
       }
     }
     term = nextTerm ??
-        DateTime(b.year + 1, _termDates.first.$1, _termDates.first.$2);
+        DateTime.utc(b.year + 1, _termDates.first.$1, _termDates.first.$2);
     final days = term.difference(b).inDays;
     return (days / 3).round().clamp(1, 10);
   }
   DateTime? prevTerm;
   for (final (m, d) in _termDates.reversed) {
-    final t = DateTime(b.year, m, d);
+    final t = DateTime.utc(b.year, m, d);
     if (t.isBefore(b)) {
       prevTerm = t;
       break;
     }
   }
   term = prevTerm ??
-      DateTime(b.year - 1, _termDates.last.$1, _termDates.last.$2);
+      DateTime.utc(b.year - 1, _termDates.last.$1, _termDates.last.$2);
   final days = b.difference(term).inDays;
   return (days / 3).round().clamp(1, 10);
 }
