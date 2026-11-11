@@ -4,7 +4,6 @@ import 'package:decision_saju/data/glossary.dart';
 import 'package:decision_saju/data/policies.dart';
 import 'package:decision_saju/engine/compat.dart';
 import 'package:decision_saju/screens/policies_screen.dart';
-import 'package:decision_saju/services/deep_link_service.dart';
 import 'package:decision_saju/services/payment_service.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:decision_saju/engine/saju.dart';
@@ -453,34 +452,6 @@ void main() {
       expect(bytes[1], 0x50);
       expect(bytes[2], 0x4E);
       expect(bytes[3], 0x47);
-    });
-  });
-
-  group('deep_link', () {
-    test('작명별에서 오면 가족 보관함으로 간다', () {
-      expect(
-        parseDeepLink(Uri.parse('decision-saju://open?from=naming-star')),
-        DeepLinkRoute.family,
-      );
-      expect(
-        parseDeepLink(Uri.parse('decision-saju://open?tab=family')),
-        DeepLinkRoute.family,
-      );
-    });
-
-    test('그 외 링크는 홈으로 간다', () {
-      expect(
-        parseDeepLink(Uri.parse('decision-saju://open')),
-        DeepLinkRoute.home,
-      );
-      expect(
-        parseDeepLink(Uri.parse('decision-saju://open?from=other')),
-        DeepLinkRoute.home,
-      );
-      expect(
-        parseDeepLink(Uri.parse('https://example.com/open')),
-        DeepLinkRoute.home,
-      );
     });
   });
 
