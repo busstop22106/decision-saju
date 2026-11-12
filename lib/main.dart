@@ -7,7 +7,6 @@ import 'screens/decision_log_screen.dart';
 import 'screens/family_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/saju_screen.dart';
-import 'screens/splash_screen.dart';
 import 'services/family_store.dart';
 import 'services/notification_service.dart';
 import 'services/payment_service.dart';
@@ -30,26 +29,8 @@ void main() async {
   runApp(const DecisionSajuApp());
 }
 
-class DecisionSajuApp extends StatefulWidget {
+class DecisionSajuApp extends StatelessWidget {
   const DecisionSajuApp({super.key});
-
-  @override
-  State<DecisionSajuApp> createState() => _DecisionSajuAppState();
-}
-
-class _DecisionSajuAppState extends State<DecisionSajuApp> {
-  /// 인앱 스플래시 표시 여부. 1.2초 뒤 페이드아웃한다.
-  /// MainShell은 스플래시 뒤에서 미리 뜨기 때문에
-  /// 가족 정보 로딩이 스플래시 시간만큼 늦어지지 않는다.
-  bool _showSplash = true;
-
-  @override
-  void initState() {
-    super.initState();
-    Timer(const Duration(milliseconds: 1200), () {
-      if (mounted) setState(() => _showSplash = false);
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,27 +40,7 @@ class _DecisionSajuAppState extends State<DecisionSajuApp> {
       // 라이트 전용 앱이다. 폰이 다크 모드여도 라이트 테마를 쓴다.
       darkTheme: AppTheme.theme,
       themeMode: ThemeMode.light,
-      home: Stack(
-        children: [
-          const MainShell(),
-          // 스플래시가 떠 있는 동안은 아래 홈을 못 누르게 막고,
-          // 사라진 뒤로는 터치를 통과시킨다. 탭하면 바로 넘어간다.
-          IgnorePointer(
-            ignoring: !_showSplash,
-            child: AnimatedOpacity(
-              opacity: _showSplash ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 400),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  if (_showSplash) setState(() => _showSplash = false);
-                },
-                child: const SplashScreen(),
-              ),
-            ),
-          ),
-        ],
-      ),
+      home: const MainShell(),
     );
   }
 }
