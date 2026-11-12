@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 
 import '../engine/compat.dart';
 import '../engine/decision.dart';
+import '../engine/decision_options.dart';
 import '../engine/saju.dart';
 import '../models.dart';
 import '../services/decision_store.dart';
@@ -79,6 +80,27 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
 
   String _dateLabel(DateTime d) => '${d.year}년 ${d.month}월 ${d.day}일';
 
+  BabyInfo _babyFor(FamilyMember m) => BabyInfo(
+        surname: '',
+        surnameHanja: '',
+        surnameStrokes: 0,
+        gender: m.gender,
+        birth: m.birth,
+        birthHour: m.birthHour,
+      );
+
+  /// 선택형은 고정 문구, 날짜형(개업·출산)은 날짜 라벨, 기타는 직접 입력한 글자.
+  String _optionLabel(bool isA) {
+    final config = configForTopic(_topic);
+    if (config.mode == DecisionMode.choice) {
+      return isA ? config.optionA : config.optionB;
+    }
+    if (!config.freeText) {
+      return _dateLabel(isA ? _dateA : _dateB);
+    }
+    return (isA ? _optionAController.text : _optionBController.text).trim();
+  }
+
   Future<void> _openAddMember() async {
     var added = false;
     await showModalBottomSheet<void>(
@@ -104,13 +126,17 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
   }
 
   void _showNotice() async {
-    final a = _optionAController.text.trim();
-    final b = _optionBController.text.trim();
-    if (a.isEmpty || b.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A안과 B안을 모두 적어주세요.')),
-      );
-      return;
+    final config = configForTopic(_topic);
+    // 기타(자유 입력)만 글자를 확인한다. 선택형은 고정 문구, 개업·출산은 날짜다.
+    if (config.freeText) {
+      final a = _optionAController.text.trim();
+      final b = _optionBController.text.trim();
+      if (a.isEmpty || b.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('A안과 B안을 모두 적어주세요.')),
+        );
+        return;
+      }
     }
     // 평생 패스를 이미 샀으면 결제 없이 바로 리포트를 연다.
     // 로컬 해금 플래그만 본다. 스토어 복원을 여기서 기다리면
@@ -122,7 +148,7 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
     }
     if (!mounted) return;
     if (unlocked) {
-      _openReport(a, b);
+      _openReport();
       return;
     }
     // 결제 전 티저 — 실제 계산 결과를 일부만 미리 보여준다.
@@ -130,7 +156,22 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
     // 길일은 결제 뒤에 확인할 수 있다.
     final member = _members[_memberIndex];
     final saju = sajuOfBirth(member.birth, member.birthHour);
-    final preview = compareOptions(saju, _dateA, _dateB);
+    final DecisionComparison preview;
+    if (config.mode == DecisionMode.choice) {
+      preview = scoreChoiceOptions(
+        baby: _babyFor(member),
+        saju: saju,
+        topic: _topic,
+        now: DateTime.now(),
+      );
+    } else {
+      preview = scoreTimingOptions(
+        saju: saju,
+        topic: _topic,
+        dateA: _dateA,
+        dateB: _dateB,
+      );
+    }
     final yongsinLine = saju.yongsin != null
         ? '용신은 ${elementNames[saju.yongsin]} 기운이에요.'
         : '부족한 오행은 ${lackingElements(saju.elementCounts).map((e) => elementNames[e]).join('·')}이에요.';
@@ -140,12 +181,12 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
         title: const Text('결정 리포트 만들기'),
         content: Text(
           '지금 계산해 본 결과\n'
-          '· A안 (${_dateLabel(_dateA)}) 결정 지수 ${preview.scoreA}점\n'
-          '· B안 (${_dateLabel(_dateB)}) 결정 지수 ${preview.scoreB}점\n'
+          '· A안 (${_optionLabel(true)}) 결정 지수 ${preview.scoreA}점\n'
+          '· B안 (${_optionLabel(false)}) 결정 지수 ${preview.scoreB}점\n'
           '· $yongsinLine\n\n'
           '결제하면 확인할 수 있어요\n'
           '· A/B 양자택일 결론 1줄 + 결정 지수\n'
-          '· 근거 3줄 (용신·일진·대운)\n'
+          '· 근거 (용신·일진·대운${config.mode == DecisionMode.choice ? '·이번 달 운세' : ''})\n'
           '· 30일 길일 3개 + 우리 가족 공통 길일\n'
           '· 조심할 날 2개 · 오늘 피할 것 1개\n'
           '· 결정 기록 + 길일 당일·3일 뒤·30일 뒤 되물음\n\n'
@@ -172,7 +213,7 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
           FilledButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _payAndOpenReport(a, b);
+              _payAndOpenReport();
             },
             child: const Text('4,900원 한 번 결제하고 보기'),
           ),
@@ -181,24 +222,25 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
     );
   }
 
-  void _openReport(String a, String b) {
+  void _openReport() {
+    final config = configForTopic(_topic);
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => DecisionReportScreen(
           member: _members[_memberIndex],
           family: _members,
           topic: _topic,
-          optionA: a,
-          optionB: b,
-          dateA: _dateA,
-          dateB: _dateB,
+          optionA: _optionLabel(true),
+          optionB: _optionLabel(false),
+          dateA: config.mode == DecisionMode.choice ? null : _dateA,
+          dateB: config.mode == DecisionMode.choice ? null : _dateB,
         ),
       ),
     );
   }
 
   /// 결제 → 성공 시에만 리포트를 연다.
-  Future<void> _payAndOpenReport(String a, String b) async {
+  Future<void> _payAndOpenReport() async {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -222,7 +264,7 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
     Navigator.of(context).pop(); // 로딩 닫기
     switch (result) {
       case PaymentResult.success:
-        _openReport(a, b);
+        _openReport();
       case PaymentResult.cancelled:
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('결제를 취소했어요.')),
@@ -243,6 +285,29 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
           const SnackBar(content: Text('결제 중 문제가 생겼어요. 다시 시도해 주세요.')),
         );
     }
+  }
+
+  Widget _optionCard(String label, String text) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.vermilion,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(text, style: const TextStyle(fontSize: 15)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -310,29 +375,84 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            Text('두 가지 선택지를 적어주세요', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _optionAController,
-              decoration: const InputDecoration(labelText: 'A안 (예: 지금 회사에 남기)'),
-            ),
-            const SizedBox(height: 4),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.calendar_today, size: 20),
-              title: Text('A안 날짜 — ${_dateLabel(_dateA)}'),
-              onTap: () => _pickDate(true),
-            ),
-            TextField(
-              controller: _optionBController,
-              decoration: const InputDecoration(labelText: 'B안 (예: 다른 회사로 옮기기)'),
-            ),
-            const SizedBox(height: 4),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.calendar_today, size: 20),
-              title: Text('B안 날짜 — ${_dateLabel(_dateB)}'),
-              onTap: () => _pickDate(false),
+            Builder(
+              builder: (context) {
+                final config = configForTopic(_topic);
+                // 선택형(이직·이사·결혼): 고정된 두 선택지를 보여준다. 날짜는 안 받는다.
+                if (config.mode == DecisionMode.choice) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('두 가지 선택지', style: theme.textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      _optionCard('A안', config.optionA),
+                      const SizedBox(height: 8),
+                      _optionCard('B안', config.optionB),
+                      const SizedBox(height: 8),
+                      Text(config.hint, style: theme.textTheme.bodySmall),
+                    ],
+                  );
+                }
+                // 날짜형(개업·출산): 날짜만 고른다.
+                if (!config.freeText) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('두 날짜를 골라주세요', style: theme.textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.calendar_today, size: 20),
+                        title: Text('A안 날짜 — ${_dateLabel(_dateA)}'),
+                        onTap: () => _pickDate(true),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.calendar_today, size: 20),
+                        title: Text('B안 날짜 — ${_dateLabel(_dateB)}'),
+                        onTap: () => _pickDate(false),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(config.hint, style: theme.textTheme.bodySmall),
+                    ],
+                  );
+                }
+                // 기타: 선택지 글자 + 날짜를 직접 적는다.
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('두 가지 선택지를 적어주세요', style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _optionAController,
+                      decoration: const InputDecoration(labelText: 'A안'),
+                    ),
+                    const SizedBox(height: 4),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.calendar_today, size: 20),
+                      title: Text('A안 날짜 — ${_dateLabel(_dateA)}'),
+                      onTap: () => _pickDate(true),
+                    ),
+                    TextField(
+                      controller: _optionBController,
+                      decoration: const InputDecoration(labelText: 'B안'),
+                    ),
+                    const SizedBox(height: 4),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.calendar_today, size: 20),
+                      title: Text('B안 날짜 — ${_dateLabel(_dateB)}'),
+                      onTap: () => _pickDate(false),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '날짜가 다르면 사주 흐름이 달라져요. A안은 보통 "지금", B안은 "조금 뒤"로 잡으면 비교가 쉬워요.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 20),
             SizedBox(
@@ -341,11 +461,6 @@ class _DecisionFormScreenState extends State<DecisionFormScreen> {
                 onPressed: _showNotice,
                 child: const Text('리포트 만들기'),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '날짜가 다르면 사주 흐름이 달라져요. A안은 보통 "지금", B안은 "조금 뒤"로 잡으면 비교가 쉬워요.',
-              style: theme.textTheme.bodySmall,
             ),
           ],
         ],
@@ -363,8 +478,10 @@ class DecisionReportScreen extends StatefulWidget {
   final String topic;
   final String optionA;
   final String optionB;
-  final DateTime dateA;
-  final DateTime dateB;
+
+  /// 선택형(이직·이사·결혼)은 날짜를 쓰지 않아 null이다.
+  final DateTime? dateA;
+  final DateTime? dateB;
 
   const DecisionReportScreen({
     super.key,
@@ -373,8 +490,8 @@ class DecisionReportScreen extends StatefulWidget {
     required this.topic,
     required this.optionA,
     required this.optionB,
-    required this.dateA,
-    required this.dateB,
+    this.dateA,
+    this.dateB,
   });
 
   @override
@@ -491,7 +608,27 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
     final now = DateTime.now();
     final saju = sajuOfBirth(widget.member.birth, widget.member.birthHour);
     final index = decisionIndex(saju, now);
-    final comparison = compareOptions(saju, widget.dateA, widget.dateB);
+    final config = configForTopic(widget.topic);
+    // 선택형은 사주+이번달 운세로 선택지를 채점하고, 날짜형은 두 날짜를 비교한다.
+    final comparison = config.mode == DecisionMode.choice
+        ? scoreChoiceOptions(
+            baby: _baby,
+            saju: saju,
+            topic: widget.topic,
+            now: now,
+          )
+        : scoreTimingOptions(
+            saju: saju,
+            topic: widget.topic,
+            dateA: widget.dateA!,
+            dateB: widget.dateB!,
+          );
+    // 선택형은 추천 선택지의 점수를, 날짜형은 오늘의 결정 지수를 크게 보여준다.
+    final displayIndex = config.mode == DecisionMode.choice
+        ? (comparison.scoreA > comparison.scoreB
+            ? comparison.scoreA
+            : comparison.scoreB)
+        : index;
     final lucky = luckyDays(saju, now);
     final worst = worstDays(saju, now);
     final familyLucky = widget.family.length > 1
@@ -502,7 +639,10 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
             now,
           )
         : <LuckyDay>[];
-    final evidence = evidenceLines(_baby, saju, now);
+    // 근거: 선택형은 채점 요인, 날짜형은 용신·일진·대운 3줄.
+    final evidence = config.mode == DecisionMode.choice
+        ? comparison.reasons
+        : evidenceLines(_baby, saju, now);
     final avoid = avoidLine(saju, now);
 
     final String conclusion;
@@ -530,7 +670,7 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '$index',
+                        '$displayIndex',
                         style: const TextStyle(
                           color: AppTheme.vermilion,
                           fontSize: 44,
@@ -543,7 +683,7 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
                         child: Padding(
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Text(
-                            '/ 100 · ${scoreLabel(index)}',
+                            '/ 100 · ${scoreLabel(displayIndex)}',
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
@@ -555,7 +695,9 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '오늘의 결정 지수 — ${widget.member.name}님의 ${widget.topic} 결정',
+                    config.mode == DecisionMode.choice
+                        ? '추천 선택지의 결정 지수 — ${widget.member.name}님의 ${widget.topic} 결정'
+                        : '오늘의 결정 지수 — ${widget.member.name}님의 ${widget.topic} 결정',
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 14),
@@ -578,7 +720,10 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _sectionTitle(theme, '근거 3줄'),
+          _sectionTitle(
+            theme,
+            config.mode == DecisionMode.choice ? '이렇게 판단했어요' : '근거 3줄',
+          ),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(18),
@@ -607,11 +752,13 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
                     ),
                     if (i < evidence.length - 1) const SizedBox(height: 10),
                   ],
-                  const SizedBox(height: 12),
-                  Text(
-                    '같은 계산에서 나온 결과입니다.',
-                    style: theme.textTheme.bodySmall,
-                  ),
+                  if (config.mode == DecisionMode.timing) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      '같은 계산에서 나온 결과입니다.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -791,7 +938,7 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
                   : () => _saveRecord(
                         comparison.recommendation,
                         conclusion,
-                        index,
+                        displayIndex,
                         firstLuckyDay:
                             lucky.isNotEmpty ? lucky.first.date : null,
                       ),
@@ -811,7 +958,7 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
             child: ReportShareCard(
               memberName: widget.member.name,
               topic: widget.topic,
-              index: index,
+              index: displayIndex,
               conclusion: conclusion,
               luckyDays: lucky,
             ),
@@ -829,7 +976,7 @@ class _DecisionReportScreenState extends State<DecisionReportScreen> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () => _shareImage(
-                    '[결정사주] ${widget.member.name}님의 ${widget.topic} 결정 리포트 — 오늘의 결정 지수 $index점. $conclusion',
+                    '[결정사주] ${widget.member.name}님의 ${widget.topic} 결정 리포트 — 결정 지수 $displayIndex점. $conclusion',
                   ),
                   child: const Text('공유하기'),
                 ),

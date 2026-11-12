@@ -125,6 +125,122 @@ String _firstHourStem(String dayStem) {
   }
 }
 
+/// 특정 날짜의 연주 (입춘 2/4 기준). 날짜만으로 판정한다.
+/// computeSaju 안의 연주 계산과 같은 로직이다 — 세운(올해의 운)을 볼 때 쓴다.
+SajuPillar yearPillarFor(DateTime date) {
+  var y = date.year;
+  if (date.month == 1 || (date.month == 2 && date.day < 4)) {
+    y -= 1;
+  }
+  return SajuPillar(_stems[(y - 4) % 10], _branches[(y - 4) % 12]);
+}
+
+/// 특정 날짜의 월주 (12절기 간이표 + 오호둔법). 날짜만으로 판정한다.
+/// computeSaju 안의 월주 계산과 같은 로직이다 — 월운(이달의 운)을 볼 때 쓴다.
+SajuPillar monthPillarFor(DateTime date) {
+  final yearStem = yearPillarFor(date).stem;
+  final mBranch = _monthBranch(date.month, date.day);
+  final mBranchIdx = _branches.indexOf(mBranch);
+  final baseStem = _firstMonthStem(yearStem);
+  final baseIdx = _stems.indexOf(baseStem);
+  final mStem = _stems[(baseIdx + (mBranchIdx - 2 + 12) % 12) % 10];
+  return SajuPillar(mStem, mBranch);
+}
+
+/// 천간의 음양 — 짝수 인덱스(갑·병·무·경·임)가 양간, 홀수가 음간이다.
+bool isYangStem(String stem) => _stems.indexOf(stem) % 2 == 0;
+
+/// 십성(十星) — 일간을 기준으로 상대 천간이 어떤 역할인지.
+/// 비견·겁재(나와 같은 오행), 식신·상관(내가 생하는 오행),
+/// 편재·정재(내가 극하는 오행), 편관·정관(나를 극하는 오행),
+/// 편인·정인(나를 생하는 오행). 음양이 같으면 편(偏), 다르면 정(正)이다.
+String tenGod(String dayMasterStem, String targetStem) {
+  final meEl = stemElement(dayMasterStem);
+  final el = stemElement(targetStem);
+  final sameYinYang = isYangStem(dayMasterStem) == isYangStem(targetStem);
+  if (el == meEl) return sameYinYang ? '비견' : '겁재';
+  if (generatesTo(meEl, el)) return sameYinYang ? '식신' : '상관';
+  if (controlsTo(meEl, el)) return sameYinYang ? '편재' : '정재';
+  if (controlsTo(el, meEl)) return sameYinYang ? '편관' : '정관';
+  return sameYinYang ? '편인' : '정인';
+}
+
+/// 십성이 관성(정관·편관)인지 — 사업·직장·변동의 별.
+bool isOfficerGod(String tenGodName) =>
+    tenGodName == '정관' || tenGodName == '편관';
+
+/// 십성이 인성(정인·편인)인지 — 안정·보호·집의 별.
+bool isSealGod(String tenGodName) =>
+    tenGodName == '정인' || tenGodName == '편인';
+
+/// 십성이 재성(정재·편재)인지 — 재물·배우자(남명)의 별.
+bool isWealthGod(String tenGodName) =>
+    tenGodName == '정재' || tenGodName == '편재';
+
+/// 십성이 식상(식신·상관)인지 — 표현·자녀의 별.
+bool isOutputGod(String tenGodName) =>
+    tenGodName == '식신' || tenGodName == '상관';
+
+/// 십성이 비겁(비견·겁재)인지 — 나와 같은 오행, 동료·유지의 별.
+bool isPeerGod(String tenGodName) =>
+    tenGodName == '비견' || tenGodName == '겁재';
+
+/// 배우자성 — 남명은 재성(정재·편재)이 아내성, 여명은 관성(정관·편관)이 남편성이다.
+bool isSpouseStar(Gender gender, String dayMasterStem, String targetStem) {
+  final god = tenGod(dayMasterStem, targetStem);
+  return gender == Gender.boy ? isWealthGod(god) : isOfficerGod(god);
+}
+
+/// 육합(六合) — 자↔축, 인↔해, 묘↔술, 진↔유, 사↔신, 오↔미.
+bool branchesCombine(String a, String b) {
+  const pairs = {
+    '자': '축',
+    '축': '자',
+    '인': '해',
+    '해': '인',
+    '묘': '술',
+    '술': '묘',
+    '진': '유',
+    '유': '진',
+    '사': '신',
+    '신': '사',
+    '오': '미',
+    '미': '오',
+  };
+  return pairs[a] == b;
+}
+
+/// 삼합(三合) — 같은 삼합국에 속하는 서로 다른 지지인지.
+/// 신자진(수국)·해묘미(목국)·인오술(화국)·사유축(금국).
+bool branchesTriple(String a, String b) {
+  if (a == b) return false;
+  const groups = [
+    {'신', '자', '진'},
+    {'해', '묘', '미'},
+    {'인', '오', '술'},
+    {'사', '유', '축'},
+  ];
+  return groups.any((g) => g.contains(a) && g.contains(b));
+}
+
+/// 역마(驛馬) — 일지를 기준으로 이동·변동의 별.
+/// 인오술(화국)은 신, 신자진(수국)은 인, 사유축(금국)은 해, 해묘미(목국)는 사.
+String travellingHorse(String dayBranch) {
+  if ({'인', '오', '술'}.contains(dayBranch)) return '신';
+  if ({'신', '자', '진'}.contains(dayBranch)) return '인';
+  if ({'사', '유', '축'}.contains(dayBranch)) return '해';
+  return '사'; // 해묘미
+}
+
+/// 도화(桃花) — 일지를 기준으로 새로운 인연의 별.
+/// 인오술은 묘, 신자진은 유, 사유축은 오, 해묘미는 자.
+String peachBlossom(String dayBranch) {
+  if ({'인', '오', '술'}.contains(dayBranch)) return '묘';
+  if ({'신', '자', '진'}.contains(dayBranch)) return '유';
+  if ({'사', '유', '축'}.contains(dayBranch)) return '오';
+  return '자'; // 해묘미
+}
+
 SajuResult computeSaju(BabyInfo baby) {
   final notes = <String>[
     '간이 만세력으로 계산한 사주예요. 절기 경계일에 태어났다면, 경계를 어느 쪽으로 보느냐에 따라 결과가 달라질 수 있어요.',
@@ -141,22 +257,17 @@ SajuResult computeSaju(BabyInfo baby) {
   }
 
   // ── 연주 (입춘 기준) ──
-  var y = dayDate.year;
   if (dayDate.month == 1 || (dayDate.month == 2 && dayDate.day < 4)) {
-    y -= 1;
     notes.add('입춘(2/4) 이전 출생이라 연주는 전해 기준으로 계산했어요.');
   }
-  final yearStem = _stems[(y - 4) % 10];
-  final yearBranch = _branches[(y - 4) % 12];
+  final yearPillar = yearPillarFor(dayDate);
+  final yearStem = yearPillar.stem;
+  final yearBranch = yearPillar.branch;
 
   // ── 월주 ──
-  final mBranch = _monthBranch(dayDate.month, dayDate.day);
-  final mBranchIdx = _branches.indexOf(mBranch);
-  final baseStem = _firstMonthStem(yearStem);
-  final baseIdx = _stems.indexOf(baseStem);
-  // 인월(인덱스 2)이 정월이므로 오프셋 계산 — 월지는 12순환이라
-  // 음수 차이를 그대로 10으로 나누면 자·축월이 틀리니 12로 정규화한다
-  final mStem = _stems[(baseIdx + (mBranchIdx - 2 + 12) % 12) % 10];
+  final monthPillar = monthPillarFor(dayDate);
+  final mStem = monthPillar.stem;
+  final mBranch = monthPillar.branch;
 
   // ── 일주 (기준일 2000-01-01 = 무오) ──
   // dayDate는 위에서 23시 자시 보정이 끝난 기준일이다.

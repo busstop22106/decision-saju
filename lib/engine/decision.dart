@@ -103,7 +103,7 @@ class LuckyDay {
   const LuckyDay(this.date, this.score, this.reason);
 }
 
-String _dayReason(SajuResult saju, DateTime date) {
+String dayReason(SajuResult saju, DateTime date) {
   final pillar = dayPillar(date);
   final stemEl = stemElement(pillar.stem);
   final branchEl = branchElement(pillar.branch);
@@ -138,7 +138,7 @@ List<LuckyDay> dayScores(
       LuckyDay(
         _addDays(start, i),
         scoreDay(saju, _addDays(start, i)),
-        _dayReason(saju, _addDays(start, i)),
+        dayReason(saju, _addDays(start, i)),
       ),
   ];
 }
@@ -187,7 +187,7 @@ List<LuckyDay> luckyDays(
   final scored = <LuckyDay>[];
   for (var i = 0; i < days; i++) {
     final d = _addDays(start, i);
-    scored.add(LuckyDay(d, scoreDay(saju, d), _dayReason(saju, d)));
+    scored.add(LuckyDay(d, scoreDay(saju, d), dayReason(saju, d)));
   }
   scored.sort((a, b) => b.score.compareTo(a.score));
   final top = scored.take(count).toList()
@@ -292,12 +292,16 @@ class DecisionComparison {
   final int scoreB;
   final String reason;
 
+  /// 근거 목록 — 어떤 요인이 몇 점씩 더했는지. 비어 있으면 근거가 없다.
+  final List<String> reasons;
+
   const DecisionComparison(
     this.recommendation,
     this.scoreA,
     this.scoreB,
-    this.reason,
-  );
+    this.reason, {
+    this.reasons = const [],
+  });
 }
 
 /// 두 날짜의 결정 지수를 비교한다. 점수 차가 10점 미만이면 '비슷함'.
