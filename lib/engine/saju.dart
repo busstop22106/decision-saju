@@ -300,7 +300,7 @@ SajuResult computeSaju(BabyInfo baby) {
     SajuPillar(yearStem, yearBranch),
     SajuPillar(mStem, mBranch),
     SajuPillar(dayStem, dayBranch),
-    if (hourPillar != null) hourPillar,
+    ?hourPillar,
   ];
   for (final p in pillars) {
     final se = stemElement(p.stem);
