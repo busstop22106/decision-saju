@@ -86,6 +86,42 @@ void main() {
       expect(branchesTriple('자', '자'), isFalse);
     });
 
+    test('삼형은 인사신·축술미·자묘 그룹끼리만 맞다', () {
+      // 인사신(무은지형)
+      expect(branchesPunish('인', '사'), isTrue);
+      expect(branchesPunish('사', '신'), isTrue);
+      expect(branchesPunish('인', '신'), isTrue);
+      // 축술미(지세지형)
+      expect(branchesPunish('축', '술'), isTrue);
+      expect(branchesPunish('술', '미'), isTrue);
+      expect(branchesPunish('축', '미'), isTrue);
+      // 자묘(무례지형)
+      expect(branchesPunish('자', '묘'), isTrue);
+      // 다른 조합은 형이 아니다
+      expect(branchesPunish('인', '해'), isFalse);
+      expect(branchesPunish('자', '오'), isFalse);
+      expect(branchesPunish('자', '자'), isFalse);
+    });
+
+    test('공망은 일주의 60갑자 순으로 정해진다', () {
+      // 갑자일(순수 자): 공망 술·해
+      expect(voidBranches('갑', '자'), ['술', '해']);
+      // 을축일도 갑자순: 공망 술·해
+      expect(voidBranches('을', '축'), ['술', '해']);
+      // 갑술일(순수 술): 공망 신·유
+      expect(voidBranches('갑', '술'), ['신', '유']);
+      // 갑신일(순수 신): 공망 오·미
+      expect(voidBranches('갑', '신'), ['오', '미']);
+      // 갑오일(순수 오): 공망 진·사
+      expect(voidBranches('갑', '오'), ['진', '사']);
+      // 갑진일(순수 진): 공망 인·묘
+      expect(voidBranches('갑', '진'), ['인', '묘']);
+      // 갑인일(순수 인): 공망 자·축
+      expect(voidBranches('갑', '인'), ['자', '축']);
+      // 픽스처 일주 기사(기토·사화): 기사는 6번(갑자순)이라 공망 술·해
+      expect(voidBranches('기', '사'), ['술', '해']);
+    });
+
     test('역마·도화가 삼합국별로 맞다', () {
       expect(travellingHorse('인'), '신');
       expect(travellingHorse('오'), '신');

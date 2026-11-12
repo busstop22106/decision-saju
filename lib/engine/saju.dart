@@ -212,6 +212,7 @@ bool branchesCombine(String a, String b) {
 
 /// 삼합(三合) — 같은 삼합국에 속하는 서로 다른 지지인지.
 /// 신자진(수국)·해묘미(목국)·인오술(화국)·사유축(금국).
+/// 두 지지만 만나는 반합(半合)이라 육합보다 약하게 보는 유파도 있다.
 bool branchesTriple(String a, String b) {
   if (a == b) return false;
   const groups = [
@@ -223,8 +224,42 @@ bool branchesTriple(String a, String b) {
   return groups.any((g) => g.contains(a) && g.contains(b));
 }
 
+/// 삼형(三刑) — 인사신(무은지형)·축술미(지세지형)·자묘(무례지형).
+/// 같은 형 그룹에 속하는 서로 다른 지지인지. 충 못지않게 중요한 흉신호다.
+/// 소송·건강에서 특히 본다.
+bool branchesPunish(String a, String b) {
+  if (a == b) return false;
+  const groups = [
+    {'인', '사', '신'},
+    {'축', '술', '미'},
+    {'자', '묘'},
+  ];
+  return groups.any((g) => g.contains(a) && g.contains(b));
+}
+
+/// 일주의 공망(空亡) 지지 2개 — 일주(천간+지지)의 60갑자 위치로 구한다.
+/// 60갑자를 10개씩 6순(旬)으로 나누면, 각 순마다 빠지는 지지 2개가 공망이다.
+/// 그 지지가 세운·월운에 나타나면 기운이 비어 효과가 약해진다고 본다.
+List<String> voidBranches(String dayStem, String dayBranch) {
+  final s = _stems.indexOf(dayStem);
+  final b = _branches.indexOf(dayBranch);
+  if (s < 0 || b < 0) return const [];
+  // 60갑자 위치 n (0~59): n ≡ s (mod 10), n ≡ b (mod 12).
+  // 유효한 간지는 s와 b의 패리티가 같아서 (s-b)가 짝수다.
+  final k = ((s - b) ~/ 2) % 6;
+  final n = s + 10 * k;
+  final cycle = n ~/ 10; // 순 (0~5)
+  // 순수(旬首) 지지 = (cycle*10) mod 12. 공망은 그 앞 2개 지지다.
+  final first = (cycle * 10) % 12;
+  return [
+    _branches[(first - 2 + 12) % 12],
+    _branches[(first - 1 + 12) % 12],
+  ];
+}
+
 /// 역마(驛馬) — 일지를 기준으로 이동·변동의 별.
 /// 인오술(화국)은 신, 신자진(수국)은 인, 사유축(금국)은 해, 해묘미(목국)는 사.
+/// (연지 기준 유파도 있으나, 여기서는 널리 쓰이는 일지 기준이다.)
 String travellingHorse(String dayBranch) {
   if ({'인', '오', '술'}.contains(dayBranch)) return '신';
   if ({'신', '자', '진'}.contains(dayBranch)) return '인';

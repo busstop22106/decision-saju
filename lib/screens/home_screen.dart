@@ -10,9 +10,9 @@ import '../services/decision_store.dart';
 import '../services/share_service.dart';
 import '../theme/app_theme.dart';
 import 'decision_log_screen.dart';
-import 'decision_report_screen.dart';
 import 'new_year_screen.dart';
 import 'policies_screen.dart';
+import 'question_browser_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final List<FamilyMember> members;
@@ -64,7 +64,7 @@ class HomeScreen extends StatelessWidget {
   void _openReportForm(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => DecisionFormScreen(
+        builder: (_) => QuestionBrowserScreen(
           members: members,
           onAddMember: onAddMember,
         ),
