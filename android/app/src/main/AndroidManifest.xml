@@ -2,7 +2,7 @@
     <!-- Android 13 이상에서 로컬 알림을 보여주려면 필요한 권한 (실행 중 요청) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
-        android:label="decision_saju"
+        android:label="결정사주"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
